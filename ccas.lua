@@ -174,7 +174,7 @@ local ProjectileWeapons={
     ["Ultimatum"]={Speed=76,Gravity=42.6,InitialAngle=7.92,Lifetime=0.8,Type="Grenade"},
     ["Iron Bomber"]={Speed=76,Gravity=42.6,InitialAngle=7.92,Lifetime=0.8,Type="Grenade"},
     ["Loose Cannon"]={Speed=76,Gravity=42.6,InitialAngle=7.92,Lifetime=0.8,Type="Grenade"},
-    ["Loch-n-Load"]={Speed=96,Gravity=42.6,InitialAngle=7.92,Lifetime=99,Type="Grenade"},
+    ["Loch-n-Load"]={Speed=96,Gravity=42.6,InitialAngle=5.412,Lifetime=99,Type="Grenade"},
     ["Syringe Crossbow"]={Speed=150,Gravity=3,InitialAngle=0,Lifetime=99,Type="Syringe"},
     ["Milk Pistol"]={Speed=150,Gravity=3,InitialAngle=0,Lifetime=99,Type="Grenade"},
     ["Flare Gun"]={Speed=125,Gravity=10,InitialAngle=0,Lifetime=99,Type="Flare"},
