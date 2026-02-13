@@ -1886,7 +1886,7 @@ do
     SG:AddLabel('Aim Key'):AddKeyPicker('SilentAimKey',{Default='C',Mode='Hold',Text='Aim Key'})
     SG:AddToggle('SilentAimMobile',{Text='Mobile Mode (Toggle Key)',Default=false})
     Toggles.SilentAimMobile:OnChanged(function()
-        if Options.SilentAimKey then Options.SilentAimKey.Mode=Toggles.SilentAimMobile.Value and 'Toggle' or 'Hold' end
+        if Options.SilentAimKey then Options.SilentAimKey.Mode=Toggles.SilentAimMobile.Value and 'Always' or 'Hold' end
     end)
     SG:AddToggle('SilentIgnoreInvis',{Text='Ignore Invisible',Default=true})
     SG:AddSlider('SilentAimFOV',{Text='FOV Radius',Default=200,Min=10,Max=800,Rounding=0})
