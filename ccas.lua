@@ -2369,24 +2369,49 @@ end
 ------------------------------------------------------------
 local function RunSilentAimLogic()
     if not Config.SilentAim.Enabled then S.silentAimKeyActive=false;return end
-    S.silentAimKeyActive=Options.SilentAimKey:GetState()
+    if isMobileMode then
+        S.silentAimKeyActive=true
+    else
+        S.silentAimKeyActive=Options.SilentAimKey:GetState()
+    end
     if S.silentAimKeyActive and IsPlayerAlive(LocalPlayer) then
         local weapon=GetLocalWeapon()
         if not BlacklistedWeapons[weapon] then
             local target=FrameCache.silentTarget
             if target then
-                if not S.shooting then
-                    VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,0);S.shooting=true;S.lastShotTime=tick()
-                elseif tick()-S.lastShotTime>=S.shotInterval then
-                    VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0)
-                    VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,0);S.lastShotTime=tick()
+                if isMobileMode then
+                    pcall(function()
+                        local LLV=LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables
+                        if not LLV.Held1.Value then
+                            LLV.Held1.Value=true
+                            S.shooting=true
+                            S.lastShotTime=tick()
+                        end
+                    end)
+                else
+                    if not S.shooting then
+                        VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,0);S.shooting=true;S.lastShotTime=tick()
+                    elseif tick()-S.lastShotTime>=S.shotInterval then
+                        VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0)
+                        VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,0);S.lastShotTime=tick()
+                    end
                 end
             elseif S.shooting and not Config.Ragebot.Enabled then
-                VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0);S.shooting=false
+                if isMobileMode then
+                    pcall(function() LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables.Held1.Value=false end)
+                else
+                    VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0)
+                end
+                S.shooting=false
             end
         end
     elseif not S.silentAimKeyActive and S.shooting and not Config.Ragebot.Enabled then
-        VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0);S.shooting=false
+        if isMobileMode then
+            pcall(function() LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables.Held1.Value=false end)
+        else
+            VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0)
+        end
+        S.shooting=false
     end
 end
 
