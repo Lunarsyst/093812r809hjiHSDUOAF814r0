@@ -314,7 +314,7 @@ getgenv().Config={
 -- WINDOW & TABS
 ------------------------------------------------------------
 local Window=Library:CreateWindow({
-    Title='                                                     Aegis | Typical Colors 2',
+    Title='                                                        Aegis | Typical Colors 2',
     Center=true,AutoShow=true,TabPadding=4,MenuFadeTime=0.2
 })
 
