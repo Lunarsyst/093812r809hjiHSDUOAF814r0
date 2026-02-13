@@ -1,5 +1,3 @@
--- Aegis | Typical Colors 2
-
 if setthreadidentity then setthreadidentity(8) end
 
 -- LIBRARY
@@ -221,7 +219,7 @@ local MeleeWeapons={
     ["Brooklyn Basher"]=true,["Supersaw"]=true,["Pestilence Poker"]=true,["Amputator"]=true,
     ["Big Earner"]=true,["Holiday Punch"]=true,["Prop Handle"]=true,["Trowel"]=true,
     ["Bat"]=true,["Broken Sword"]=true,["Crowbar"]=true,["Fire Extinguisher"]=true,
-    ["Fists"]=true,["Knife"]=true,["Saw"]=true,["Wrench"]=true,["Machete"]=true,
+    ["Fists"]=true,["Knife"]=true,["Saw"]=true,["Wrench"]=true,["Machete"]=true,["The Black Death"]=true,["Eyelander"]=true,
 }
 
 local AirblastWeapons={
@@ -266,8 +264,8 @@ local ProjectileCFrameOffsets={
 
 -- Projectile sizes: Rockets = 3,1,1 | Grenades = 2,1,1 | Rest = 1,1,1
 local ProjectileSizes={
-    ["Rocket"]=Vector3.new(3,1,1),
-    ["Grenade"]=Vector3.new(2,1,1),
+    ["Rocket"]=Vector3.new(4,1,1),
+    ["Grenade"]=Vector3.new(3,1,1),
     ["Syringe"]=Vector3.new(1,1,1),
     ["Arrow"]=Vector3.new(1,1,1),
 }
@@ -316,7 +314,7 @@ getgenv().Config={
 -- WINDOW & TABS
 ------------------------------------------------------------
 local Window=Library:CreateWindow({
-    Title='                                                Aegis | Typical Colors 2',
+    Title='                                                     Aegis | Typical Colors 2',
     Center=true,AutoShow=true,TabPadding=4,MenuFadeTime=0.2
 })
 
