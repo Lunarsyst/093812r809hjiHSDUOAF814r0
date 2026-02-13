@@ -173,8 +173,8 @@ local ProjectileWeapons={
     ["Iron Bomber"]={Speed=76,Gravity=42.6,InitialAngle=7.92,Lifetime=0.8,Type="Grenade"},
     ["Loose Cannon"]={Speed=76,Gravity=42.6,InitialAngle=7.92,Lifetime=0.8,Type="Grenade"},
     ["Loch-n-Load"]={Speed=96,Gravity=42.6,InitialAngle=5.412,Lifetime=99,Type="Grenade"},
-    ["Syringe Crossbow"]={Speed=150,Gravity=3,InitialAngle=0,Lifetime=99,Type="Syringe"},
-    ["Milk Pistol"]={Speed=150,Gravity=3,InitialAngle=0,Lifetime=99,Type="Grenade"},
+    ["Syringe Crossbow"]={Speed=100,Gravity=3,InitialAngle=0,Lifetime=99,Type="Syringe"},
+    ["Milk Pistol"]={Speed=100,Gravity=3,InitialAngle=0,Lifetime=99,Type="Grenade"},
     ["Flare Gun"]={Speed=125,Gravity=10,InitialAngle=0,Lifetime=99,Type="Flare"},
     ["Detonator"]={Speed=125,Gravity=10,InitialAngle=0,Lifetime=99,Type="Flare"},
     ["Rescue Ranger"]={Speed=150,Gravity=3,InitialAngle=0,Lifetime=99,Type="Syringe"},
@@ -212,7 +212,7 @@ local MeleeWeapons={
     ["Conniver's Kunai"]=true,["Elegant Blade"]=true,["Homewrecker"]=true,
     ["Rising Sun Katana"]=true,["Caber"]=true,["Rubber Chicken"]=true,["Holy Mackerel"]=true,
     ["Sandman"]=true,["Golden Frying Pan"]=true,["Frying Pan"]=true,["Tribalman's Shiv"]=true,
-    ["Market Gardener"]=true,["Market Gardener2"]=true,["Maxine"]=true,["Atomizer"]=true,
+    ["Market Gardener"]=true,["Market Gardener2"]=true,["Atomizer"]=true,
     ["Katana"]=true,["Golf Club"]=true,["Skeleton Bat"]=true,["Six Point Shuriken"]=true,
     ["Fan O' War"]=true,["Wrap Assassin"]=true,["Shahanshah"]=true,["Golden Knife"]=true,
     ["Candy Cane"]=true,["Fists of Steel"]=true,["Scotsman's Skullcutter"]=true,
@@ -314,7 +314,7 @@ getgenv().Config={
 -- WINDOW & TABS
 ------------------------------------------------------------
 local Window=Library:CreateWindow({
-    Title='                                                        Aegis | Typical Colors 2',
+    Title='                                                              Aegis | Typical Colors 2',
     Center=true,AutoShow=true,TabPadding=4,MenuFadeTime=0.2
 })
 
