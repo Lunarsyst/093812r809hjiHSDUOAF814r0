@@ -178,6 +178,9 @@ local ProjectileWeapons={
     ["Flare Gun"]={Speed=125,Gravity=10,InitialAngle=0,Lifetime=99,Type="Flare"},
     ["Detonator"]={Speed=125,Gravity=10,InitialAngle=0,Lifetime=99,Type="Flare"},
     ["Rescue Ranger"]={Speed=150,Gravity=3,InitialAngle=0,Lifetime=99,Type="Syringe"},
+    ["Apollo"]={Speed=100,Gravity=3,InitialAngle=0,Lifetime=99,Type="Syringe"},
+    ["Big Bite"]={Speed=68.75,Gravity=0,InitialAngle=0,Lifetime=99,Type="Rocket"},
+    ["Night Sky Ignitor"]={Speed=123.75,Gravity=0,InitialAngle=0,Lifetime=99,Type="Rocket"},
 }
 
 local ChargeWeapons={
@@ -192,29 +195,29 @@ local ArcWeapons={
     ["Grenade Launcher"]=true,["Ultimatum"]=true,
     ["Iron Bomber"]=true,["Loose Cannon"]=true,["Loch-n-Load"]=true,
     ["Huntsman"]=true,["Flare Gun"]=true,["Maverick"]=true,["Detonator"]=true,["Milk Pistol"]=true,["Syringe Crossbow"]=true,
-    ["Rescue Ranger"]=true,
+    ["Rescue Ranger"]=true,["Apollo"]=true
 }
 
 local BackstabWeapons={
     ["Knife"]=true,["Conniver's Kunai"]=true,["Your Eternal Reward"]=true,
     ["Icicle"]=true,["Swift Stiletto"]=true,["The Wraith"]=true,
-    ["Big Earner"]=true,["Spy-cicle"]=true,["Wanga Prick"]=true,
+    ["Big Earner"]=true,["Spy-cicle"]=true,["Wanga Prick"]=true,["Karambit"]=true,["Golden Knife"]=true
 }
 
 local MeleeWeapons={
     ["Fist"]=true,["Ice Dagger"]=true,["Linked Sword"]=true,["Mummy Staff"]=true,
     ["Rapier"]=true,["Wrecking Ball"]=true,["Le Executeur"]=true,["Pirate Cutlass"]=true,
     ["Warrior's Spirit"]=true,["Pain Train"]=true,["Icicle"]=true,["Mummy Sword"]=true,
-    ["Karambit"]=true,["Skeleton Scythe"]=true,["Rally Racket"]=true,["Eviction Notice"]=true,
-    ["Your Eternal Reward"]=true,["Conscientious Objector"]=true,["Gunslinger"]=true,
+    ["Skeleton Scythe"]=true,["Rally Racket"]=true,["Eviction Notice"]=true,
+    ["Conscientious Objector"]=true,["Gunslinger"]=true,
     ["Slash n' Burn"]=true,["Doll Maker"]=true,["Three Rune Blade"]=true,["Equalizer"]=true,
-    ["Golden Wrench"]=true,["Southern Hospitality"]=true,["Wraith"]=true,
-    ["Conniver's Kunai"]=true,["Elegant Blade"]=true,["Homewrecker"]=true,
+    ["Golden Wrench"]=true,["Southern Hospitality"]=true,
+    ["Elegant Blade"]=true,["Homewrecker"]=true,
     ["Rising Sun Katana"]=true,["Caber"]=true,["Rubber Chicken"]=true,["Holy Mackerel"]=true,
     ["Sandman"]=true,["Golden Frying Pan"]=true,["Frying Pan"]=true,["Tribalman's Shiv"]=true,
     ["Market Gardener"]=true,["Market Gardener2"]=true,["Atomizer"]=true,
     ["Katana"]=true,["Golf Club"]=true,["Skeleton Bat"]=true,["Six Point Shuriken"]=true,
-    ["Fan O' War"]=true,["Wrap Assassin"]=true,["Shahanshah"]=true,["Golden Knife"]=true,
+    ["Fan O' War"]=true,["Wrap Assassin"]=true,["Shahanshah"]=true,
     ["Candy Cane"]=true,["Fists of Steel"]=true,["Scotsman's Skullcutter"]=true,
     ["Brooklyn Basher"]=true,["Supersaw"]=true,["Pestilence Poker"]=true,["Amputator"]=true,
     ["Big Earner"]=true,["Holiday Punch"]=true,["Prop Handle"]=true,["Trowel"]=true,
@@ -260,6 +263,9 @@ local ProjectileCFrameOffsets={
     ["Milk Pistol"]=CFrame.new(0.5, 0.1875, 0.5),
     ["Syringe Crossbow"]=CFrame.new(0.5, 0.1875, 0.5),
     ["Huntsman"]=CFrame.new(0.5, -0.1875, -2),
+    ["Apollo"]=CFrame.new(0.5, 0.1875, 0.5),
+    ["Big Bite"]=CFrame.new(0.75, -0.1875, -0.275),
+    ["Night Sky Ignitor"]=CFrame.new(0.75, -0.1875, 1.635),
 }
 
 -- Projectile sizes: Rockets = 3,1,1 | Grenades = 2,1,1 | Rest = 1,1,1
@@ -476,7 +482,7 @@ local function WeaponAllowed()
 end
 
 local function IsSyringeWeapon(weapon)
-    return weapon=="Syringe Crossbow" or weapon=="Crusader's Crossbow"
+    return weapon=="Syringe Crossbow" or weapon=="Apollo"
 end
 
 local function IsPlayerFullHP(player)
