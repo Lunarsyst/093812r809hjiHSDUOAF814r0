@@ -157,17 +157,17 @@ local SkeletonConnections={
 }
 
 local ProjectileWeapons={
-    ["Direct Hit"]={Speed=123.75,Gravity=0,InitialAngle=0,Lifetime=99,Type="Rocket"},
+    ["Direct Hit"]={Speed=123.75,Gravity=2,InitialAngle=0,Lifetime=99,Type="Rocket"},
     ["Maverick"]={Speed=68.75,Gravity=15,InitialAngle=0,Lifetime=99,Type="Rocket"},
-    ["Rocket Launcher"]={Speed=68.75,Gravity=0,InitialAngle=0,Lifetime=99,Type="Rocket"},
-    ["Double Trouble"]={Speed=68.75,Gravity=0,InitialAngle=0,Lifetime=99,Type="Rocket"},
-    ["Blackbox"]={Speed=68.75,Gravity=0,InitialAngle=0,Lifetime=99,Type="Rocket"},
-    ["Original"]={Speed=68.75,Gravity=0,InitialAngle=0,Lifetime=99,Type="Rocket"},
-    ["Cow Mangler 5000"]={Speed=68.75,Gravity=0,InitialAngle=0,Lifetime=99,Type="Rocket"},
-    ["Wreckers Yard"]={Speed=68.75,Gravity=0,InitialAngle=0,Lifetime=99,Type="Rocket"},
-    ["G-Bomb"]={Speed=44.6875,Gravity=0,InitialAngle=0,Lifetime=99,Type="Rocket"},
-    ["Airstrike"]={Speed=68.75,Gravity=0,InitialAngle=0,Lifetime=99,Type="Rocket",AirSpeed=110},
-    ["Liberty Launcher"]={Speed=96.25,Gravity=0,InitialAngle=0,Lifetime=99,Type="Rocket"},
+    ["Rocket Launcher"]={Speed=68.75,Gravity=2,InitialAngle=0,Lifetime=99,Type="Rocket"},
+    ["Double Trouble"]={Speed=68.75,Gravity=2,InitialAngle=0,Lifetime=99,Type="Rocket"},
+    ["Blackbox"]={Speed=68.75,Gravity=2,InitialAngle=0,Lifetime=99,Type="Rocket"},
+    ["Original"]={Speed=68.75,Gravity=2,InitialAngle=0,Lifetime=99,Type="Rocket"},
+    ["Cow Mangler 5000"]={Speed=68.75,Gravity=2,InitialAngle=0,Lifetime=99,Type="Rocket"},
+    ["Wreckers Yard"]={Speed=68.75,Gravity=2,InitialAngle=0,Lifetime=99,Type="Rocket"},
+    ["G-Bomb"]={Speed=44.6875,Gravity=2,InitialAngle=0,Lifetime=99,Type="Rocket"},
+    ["Airstrike"]={Speed=68.75,Gravity=2,InitialAngle=0,Lifetime=99,Type="Rocket",AirSpeed=110},
+    ["Liberty Launcher"]={Speed=96.25,Gravity=2,InitialAngle=0,Lifetime=99,Type="Rocket"},
     ["Grenade Launcher"]={Speed=76,Gravity=42.6,InitialAngle=7.92,Lifetime=0.8,Type="Grenade"},
     ["Ultimatum"]={Speed=76,Gravity=42.6,InitialAngle=7.92,Lifetime=0.8,Type="Grenade"},
     ["Iron Bomber"]={Speed=76,Gravity=42.6,InitialAngle=7.92,Lifetime=0.8,Type="Grenade"},
@@ -179,8 +179,8 @@ local ProjectileWeapons={
     ["Detonator"]={Speed=125,Gravity=10,InitialAngle=0,Lifetime=99,Type="Flare"},
     ["Rescue Ranger"]={Speed=150,Gravity=3,InitialAngle=0,Lifetime=99,Type="Syringe"},
     ["Apollo"]={Speed=125,Gravity=3,InitialAngle=0,Lifetime=99,Type="Syringe"},
-    ["Big Bite"]={Speed=68.75,Gravity=0,InitialAngle=0,Lifetime=99,Type="Rocket"},
-    ["Night Sky Ignitor"]={Speed=123.75,Gravity=0,InitialAngle=0,Lifetime=99,Type="Rocket"},
+    ["Big Bite"]={Speed=68.75,Gravity=1,InitialAngle=0,Lifetime=99,Type="Rocket"},
+    ["Night Sky Ignitor"]={Speed=123.75,Gravity=1,InitialAngle=0,Lifetime=99,Type="Rocket"},
 }
 
 local ChargeWeapons={
