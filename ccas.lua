@@ -686,6 +686,94 @@ local function SimulateTargetPosition(player,totalTime,steps,rp)
     return simPos
 end
 
+local function SimulateTargetPositionWallChecked(player,totalTime,steps,rp)
+    steps=steps or 15
+    rp=rp or GetSimRayParams()
+    local char=player.Character;if not char then return nil end
+    local hrp=GetHRP(char);if not hrp then return nil end
+    local currentPos=hrp.Position
+    local rawVel=GetPlayerVelocity(player)
+    local posVel=GetPositionDerivedVelocity(player)
+    local hRaw=Vector3.new(rawVel.X,0,rawVel.Z)
+    local hPos=Vector3.new(posVel.X,0,posVel.Z)
+    local hVel
+    if hPos.Magnitude>1 and (hPos-hRaw).Magnitude>2 then
+        hVel=hPos.Magnitude>0.1 and hPos.Unit*math.max(hRaw.Magnitude,hPos.Magnitude) or hRaw
+    else hVel=hRaw end
+    local vY=rawVel.Y
+    local acceleration=GetPlayerAcceleration(player)
+    local grounded=IsOnGround(char)
+    if hVel.Magnitude>80 then hVel=hVel.Unit*80 end
+    local timeStep=totalTime/steps
+    local simPos=currentPos;local simVelY=vY;local simGrounded=grounded
+    local simHVel=hVel;local simStopped=false
+    local isJumping=grounded and vY>TC2_JUMP_POWER*0.5
+    local lastValidPos=currentPos
+    local wallRP=RaycastParams.new()
+    wallRP.FilterType=Enum.RaycastFilterType.Blacklist
+    local wallIgnore={}
+    for _,p in ipairs(Players:GetPlayers()) do if p.Character then table.insert(wallIgnore,p.Character) end end
+    table.insert(wallIgnore,Camera)
+    wallRP.FilterDescendantsInstances=wallIgnore
+    wallRP.IgnoreWater=true
+    for i=1,steps do
+        if simStopped and simGrounded then continue end
+        local t=timeStep
+        local prevPos=simPos
+        if simGrounded and not isJumping then
+            if not simStopped then
+                local hAcc=Vector3.new(acceleration.X,0,acceleration.Z)
+                local stepVel=simHVel+hAcc*t*0.3
+                if stepVel.Magnitude>80 then stepVel=stepVel.Unit*80 end
+                local moveDist=stepVel.Magnitude*t
+                local moveDir2=stepVel.Magnitude>0.1 and stepVel.Unit or Vector3.zero
+                if moveDist>0.01 then
+                    local newPos,hitWall=SimTraceSurface(simPos,moveDir2,moveDist,rp)
+                    simPos=newPos
+                    if hitWall then simStopped=true;simHVel=Vector3.zero else simHVel=stepVel end
+                end
+            end
+            local groundCheck=SimTraceGround(simPos,rp)
+            if not groundCheck or (simPos.Y-groundCheck.Y)>5 then simGrounded=false;simVelY=0;simStopped=false end
+        else
+            if isJumping then simVelY=TC2_JUMP_POWER;simGrounded=false;isJumping=false end
+            if not simStopped then
+                local hAcc=Vector3.new(acceleration.X,0,acceleration.Z)
+                simHVel=simHVel+hAcc*t*0.15
+                if simHVel.Magnitude>80 then simHVel=simHVel.Unit*80 end
+            end
+            local hMove=simHVel*t;local newPos=simPos+hMove
+            if hMove.Magnitude>0.01 then
+                local blocked,stopPos=SimCheckWall(simPos,newPos,rp)
+                if blocked then newPos=stopPos;simHVel=Vector3.zero;simStopped=true end
+            end
+            local yMove=simVelY*t-0.5*TC2_GRAVITY*t*t
+            simVelY=simVelY-TC2_GRAVITY*t
+            newPos=Vector3.new(newPos.X,simPos.Y+yMove,newPos.Z)
+            local groundPos=SimTraceGround(newPos,rp)
+            if groundPos and newPos.Y<=groundPos.Y+2.5 then
+                newPos=Vector3.new(newPos.X,groundPos.Y+2.5,newPos.Z);simGrounded=true;simVelY=0
+            end
+            if yMove>0 then
+                local ceilCheck=Workspace:Raycast(simPos,Vector3.new(0,yMove+1,0),rp)
+                if ceilCheck then newPos=Vector3.new(newPos.X,ceilCheck.Position.Y-3,newPos.Z);simVelY=0 end
+            end
+            simPos=newPos
+        end
+        local dir=simPos-prevPos
+        if dir.Magnitude>0.1 then
+            local wallHit=Workspace:Raycast(prevPos,dir,wallRP)
+            if wallHit then return lastValidPos end
+        end
+        lastValidPos=simPos
+    end
+    local groundCheck2=SimTraceGround(simPos,rp)
+    if groundCheck2 and simPos.Y<groundCheck2.Y+2.5 then
+        simPos=Vector3.new(simPos.X,groundCheck2.Y+2.5,simPos.Z)
+    end
+    return simPos
+end
+
 ------------------------------------------------------------
 -- OBJECT CACHING
 ------------------------------------------------------------
@@ -762,12 +850,12 @@ end
 ------------------------------------------------------------
 local function GetCurrentWeaponSpeed(weaponName)
     if weaponName=="Airstrike" then
-        local rj = IsRocketJumped()
-        return rj and 110 or 68.75, 0, 0, 0, 99
+        local rj=IsRocketJumped()
+        return rj and 110 or 68.75,0,0,0,99
     end
     local cd=ChargeWeapons[weaponName]
     if cd then
-        local chargeAmount = S.currentChargePercent
+        local chargeAmount=S.currentChargePercent
         local speed=cd.SpeedMin+(cd.SpeedMax-cd.SpeedMin)*chargeAmount
         local gravity
         if cd.GravityMin and cd.GravityMax then
@@ -852,70 +940,8 @@ local function CanProjectileReachTarget(origin,targetPos,speed,gravity,initAngle
 end
 
 ------------------------------------------------------------
--- PROJECTILE PREDICTION
+-- PROJECTILE PREDICTION HELPERS (must be before PredictProjectileHit)
 ------------------------------------------------------------
-local function PredictProjectileHit(targetPart, player, weaponName)
-    local speed, gravity, initAngle, armTime, lifetime = GetCurrentWeaponSpeed(weaponName)
-    if not speed then return targetPart.Position, 0 end
-    local origin = (Camera.CFrame * CFrame.new(PROJECTILE_OFFSET)).Position
-    local ping = GetPing()
-    local char = targetPart:FindFirstAncestorOfClass("Model")
-    local hrp = char and GetHRP(char)
-    if not hrp then return targetPart.Position, 0 end
-    local currentPos = hrp.Position
-    local velocity = GetPlayerVelocity(player)
-
-    -- If velocity is stale (high velocity but not actually moving), treat as stationary
-    if IsVelocityStale(player) then
-        return currentPos, (currentPos - origin).Magnitude / speed
-    end
-
-    if velocity.Magnitude < 0.5 then return currentPos, (currentPos - origin).Magnitude / speed end
-
-    local rp = GetSimRayParams()
-    local predictedPos = currentPos
-    local travelTime = 0
-
-    for iteration = 1, 5 do
-        local dx = predictedPos.X - origin.X
-        local dz = predictedPos.Z - origin.Z
-        local horizontalDist = math.sqrt(dx * dx + dz * dz)
-        if gravity == 0 and initAngle == 0 then
-            travelTime = (predictedPos - origin).Magnitude / speed
-        else
-            local angleRad = math.rad(initAngle)
-            local horizontalSpeed = speed * math.cos(angleRad)
-            travelTime = horizontalDist / math.max(horizontalSpeed, 1)
-        end
-        travelTime = math.min(travelTime, lifetime)
-        if armTime and armTime > 0 then travelTime = math.max(travelTime, armTime) end
-        local totalTime = travelTime + (ping * 2)
-        local simSteps = math.clamp(math.floor(totalTime / 0.033), 5, 30)
-
-        -- Use wall-checked simulation instead of regular simulation
-        local simResult = SimulateTargetPositionWallChecked(player, totalTime, simSteps, rp)
-        if simResult then predictedPos = simResult else return currentPos, travelTime end
-    end
-
-    -- Self-safety: don't aim within 3 studs of self
-    local myHRP = GetHRP(GetLocalCharacter())
-    if myHRP and (predictedPos - myHRP.Position).Magnitude < 3 then
-        return currentPos, (currentPos - origin).Magnitude / speed
-    end
-
-    -- Check if our projectile can actually reach the predicted position without hitting a wall
-    if not CanProjectileHitPosition(origin, predictedPos, speed, gravity, initAngle, lifetime, weaponName) then
-        -- Predicted position is blocked, try current position
-        if CanProjectileHitPosition(origin, currentPos, speed, gravity, initAngle, lifetime, weaponName) then
-            return currentPos, (currentPos - origin).Magnitude / speed
-        end
-        -- Both blocked, don't shoot
-        return nil, 0
-    end
-
-    return predictedPos, travelTime
-end
-
 local function CalculateAimPoint(origin,targetPos,speed,gravity,weaponName)
     if gravity==0 then return targetPos end
     local dir=targetPos-origin;local hDir=Vector3.new(dir.X,0,dir.Z);local hDist=hDir.Magnitude
@@ -934,6 +960,117 @@ local function CalculateAimPoint(origin,targetPos,speed,gravity,weaponName)
     local aim=targetPos+Vector3.new(0,drop,0)
     if initAngle>0 then aim=aim-Vector3.new(0,math.tan(math.rad(initAngle))*hDist*0.3,0) end
     return aim
+end
+
+local function CanProjectileHitPosition(origin,targetPos,speed,gravity,initAngle,lifetime,weaponName)
+    local wallRP=RaycastParams.new()
+    wallRP.FilterType=Enum.RaycastFilterType.Blacklist
+    local wallIgnore={}
+    for _,p in ipairs(Players:GetPlayers()) do if p.Character then table.insert(wallIgnore,p.Character) end end
+    table.insert(wallIgnore,Camera)
+    wallRP.FilterDescendantsInstances=wallIgnore
+    wallRP.IgnoreWater=true
+    if gravity==0 then
+        local dir=targetPos-origin
+        local hit=Workspace:Raycast(origin,dir,wallRP)
+        if hit then
+            local hitDist=(hit.Position-origin).Magnitude
+            local targetDist=dir.Magnitude
+            return hitDist>=targetDist-2
+        end
+        return true
+    end
+    local aimPoint=CalculateAimPoint(origin,targetPos,speed,gravity,weaponName)
+    local aimDir=(aimPoint-origin).Unit
+    local hDir=Vector3.new(aimDir.X,0,aimDir.Z)
+    if hDir.Magnitude<0.01 then return false end
+    hDir=hDir.Unit
+    local pitch=math.asin(math.clamp(aimDir.Y,-1,1))
+    local totalAngle=pitch+math.rad(initAngle)
+    local hSpeed=speed*math.cos(totalAngle)
+    local vSpeed=speed*math.sin(totalAngle)
+    local hDist=Vector3.new(targetPos.X-origin.X,0,targetPos.Z-origin.Z).Magnitude
+    local totalTime=math.min(hDist/math.max(hSpeed,1),lifetime)
+    local steps=20
+    local prevPos=origin
+    for i=1,steps do
+        local t=(i/steps)*totalTime
+        local hPos=origin+hDir*(hSpeed*t)
+        local yPos=origin.Y+vSpeed*t-0.5*gravity*t*t
+        local curPos=Vector3.new(hPos.X,yPos,hPos.Z)
+        local hit=Workspace:Raycast(prevPos,curPos-prevPos,wallRP)
+        if hit then
+            local hitDistToTarget=(hit.Position-targetPos).Magnitude
+            return hitDistToTarget<5
+        end
+        prevPos=curPos
+    end
+    local finalDist=(prevPos-targetPos).Magnitude
+    return finalDist<10
+end
+
+local function IsVelocityStale(player)
+    local hist=playerPositionHistory[player]
+    if not hist or #hist<5 then return false end
+    local recent=hist[#hist]
+    local older=hist[math.max(1,#hist-5)]
+    local dt=recent.Time-older.Time
+    if dt<0.25 then return false end
+    local moved=(recent.Pos-older.Pos).Magnitude
+    local vel=GetPlayerVelocity(player)
+    if vel.Magnitude>10 and moved<2 then return true end
+    return false
+end
+
+------------------------------------------------------------
+-- PROJECTILE PREDICTION
+------------------------------------------------------------
+local function PredictProjectileHit(targetPart,player,weaponName)
+    local speed,gravity,initAngle,armTime,lifetime=GetCurrentWeaponSpeed(weaponName)
+    if not speed then return targetPart.Position,0 end
+    local origin=(Camera.CFrame*CFrame.new(PROJECTILE_OFFSET)).Position
+    local ping=GetPing()
+    local char=targetPart:FindFirstAncestorOfClass("Model")
+    local hrp=char and GetHRP(char)
+    if not hrp then return targetPart.Position,0 end
+    local currentPos=hrp.Position
+    local velocity=GetPlayerVelocity(player)
+    if IsVelocityStale(player) then
+        return currentPos,(currentPos-origin).Magnitude/speed
+    end
+    if velocity.Magnitude<0.5 then return currentPos,(currentPos-origin).Magnitude/speed end
+    local rp=GetSimRayParams()
+    local predictedPos=currentPos
+    local travelTime=0
+    for iteration=1,5 do
+        local dx=predictedPos.X-origin.X
+        local dz=predictedPos.Z-origin.Z
+        local horizontalDist=math.sqrt(dx*dx+dz*dz)
+        if gravity==0 and initAngle==0 then
+            travelTime=(predictedPos-origin).Magnitude/speed
+        else
+            local angleRad=math.rad(initAngle)
+            local horizontalSpeed=speed*math.cos(angleRad)
+            travelTime=horizontalDist/math.max(horizontalSpeed,1)
+        end
+        travelTime=math.min(travelTime,lifetime)
+        if armTime and armTime>0 then travelTime=math.max(travelTime,armTime) end
+        local totalTime=travelTime+(ping*2)
+        local simSteps=math.clamp(math.floor(totalTime/0.033),5,30)
+        local simResult=SimulateTargetPositionWallChecked(player,totalTime,simSteps,rp)
+        if simResult then predictedPos=simResult else return currentPos,travelTime end
+    end
+    local myHRP=GetHRP(GetLocalCharacter())
+    if myHRP and (predictedPos-myHRP.Position).Magnitude<3 then
+        return currentPos,(currentPos-origin).Magnitude/speed
+    end
+    if not CanProjectileHitPosition(origin,predictedPos,speed,gravity,initAngle,lifetime,weaponName) then
+        if CanProjectileHitPosition(origin,currentPos,speed,gravity,initAngle,lifetime,weaponName) then
+            return currentPos,(currentPos-origin).Magnitude/speed
+        end
+        return nil,0
+    end
+    return predictedPos,travelTime
 end
 
 local function GenerateProjectilePath(origin,targetPos,weaponName,steps)
@@ -964,176 +1101,6 @@ local function GenerateProjectilePath(origin,targetPos,weaponName,steps)
     end
     return points
 end
-
-local function SimulateTargetPositionWallChecked(player, totalTime, steps, rp)
-    steps = steps or 15
-    rp = rp or GetSimRayParams()
-    local char = player.Character; if not char then return nil end
-    local hrp = GetHRP(char); if not hrp then return nil end
-    local currentPos = hrp.Position
-    local rawVel = GetPlayerVelocity(player)
-    local posVel = GetPositionDerivedVelocity(player)
-    local hRaw = Vector3.new(rawVel.X, 0, rawVel.Z)
-    local hPos = Vector3.new(posVel.X, 0, posVel.Z)
-    local hVel
-    if hPos.Magnitude > 1 and (hPos - hRaw).Magnitude > 2 then
-        hVel = hPos.Magnitude > 0.1 and hPos.Unit * math.max(hRaw.Magnitude, hPos.Magnitude) or hRaw
-    else hVel = hRaw end
-    local vY = rawVel.Y
-    local acceleration = GetPlayerAcceleration(player)
-    local grounded = IsOnGround(char)
-    if hVel.Magnitude > 80 then hVel = hVel.Unit * 80 end
-    local timeStep = totalTime / steps
-    local simPos = currentPos; local simVelY = vY; local simGrounded = grounded
-    local simHVel = hVel; local simStopped = false
-    local isJumping = grounded and vY > TC2_JUMP_POWER * 0.5
-    local lastValidPos = currentPos
-
-    -- Build a separate raycast params that DOESN'T filter players (for wall checking along target path)
-    local wallRP = RaycastParams.new()
-    wallRP.FilterType = Enum.RaycastFilterType.Blacklist
-    local wallIgnore = {}
-    for _, p in ipairs(Players:GetPlayers()) do if p.Character then table.insert(wallIgnore, p.Character) end end
-    table.insert(wallIgnore, Camera)
-    wallRP.FilterDescendantsInstances = wallIgnore
-    wallRP.IgnoreWater = true
-
-    for i = 1, steps do
-        if simStopped and simGrounded then continue end
-        local t = timeStep
-        local prevPos = simPos
-        if simGrounded and not isJumping then
-            if not simStopped then
-                local hAcc = Vector3.new(acceleration.X, 0, acceleration.Z)
-                local stepVel = simHVel + hAcc * t * 0.3
-                if stepVel.Magnitude > 80 then stepVel = stepVel.Unit * 80 end
-                local moveDist = stepVel.Magnitude * t
-                local moveDir2 = stepVel.Magnitude > 0.1 and stepVel.Unit or Vector3.zero
-                if moveDist > 0.01 then
-                    local newPos, hitWall = SimTraceSurface(simPos, moveDir2, moveDist, rp)
-                    simPos = newPos
-                    if hitWall then simStopped = true; simHVel = Vector3.zero else simHVel = stepVel end
-                end
-            end
-            local groundCheck = SimTraceGround(simPos, rp)
-            if not groundCheck or (simPos.Y - groundCheck.Y) > 5 then simGrounded = false; simVelY = 0; simStopped = false end
-        else
-            if isJumping then simVelY = TC2_JUMP_POWER; simGrounded = false; isJumping = false end
-            if not simStopped then
-                local hAcc = Vector3.new(acceleration.X, 0, acceleration.Z)
-                simHVel = simHVel + hAcc * t * 0.15
-                if simHVel.Magnitude > 80 then simHVel = simHVel.Unit * 80 end
-            end
-            local hMove = simHVel * t; local newPos = simPos + hMove
-            if hMove.Magnitude > 0.01 then
-                local blocked, stopPos = SimCheckWall(simPos, newPos, rp)
-                if blocked then newPos = stopPos; simHVel = Vector3.zero; simStopped = true end
-            end
-            local yMove = simVelY * t - 0.5 * TC2_GRAVITY * t * t
-            simVelY = simVelY - TC2_GRAVITY * t
-            newPos = Vector3.new(newPos.X, simPos.Y + yMove, newPos.Z)
-            local groundPos = SimTraceGround(newPos, rp)
-            if groundPos and newPos.Y <= groundPos.Y + 2.5 then
-                newPos = Vector3.new(newPos.X, groundPos.Y + 2.5, newPos.Z); simGrounded = true; simVelY = 0
-            end
-            if yMove > 0 then
-                local ceilCheck = Workspace:Raycast(simPos, Vector3.new(0, yMove + 1, 0), rp)
-                if ceilCheck then newPos = Vector3.new(newPos.X, ceilCheck.Position.Y - 3, newPos.Z); simVelY = 0 end
-            end
-            simPos = newPos
-        end
-
-        -- Check if the target would walk through a wall to reach this position
-        local dir = simPos - prevPos
-        if dir.Magnitude > 0.1 then
-            local wallHit = Workspace:Raycast(prevPos, dir, wallRP)
-            if wallHit then
-                -- Target can't walk through this wall, stop here
-                return lastValidPos
-            end
-        end
-
-        lastValidPos = simPos
-    end
-
-    local groundCheck2 = SimTraceGround(simPos, rp)
-    if groundCheck2 and simPos.Y < groundCheck2.Y + 2.5 then
-        simPos = Vector3.new(simPos.X, groundCheck2.Y + 2.5, simPos.Z)
-    end
-    return simPos
-end
-
-local function CanProjectileHitPosition(origin, targetPos, speed, gravity, initAngle, lifetime, weaponName)
-    local wallRP = RaycastParams.new()
-    wallRP.FilterType = Enum.RaycastFilterType.Blacklist
-    local wallIgnore = {}
-    for _, p in ipairs(Players:GetPlayers()) do if p.Character then table.insert(wallIgnore, p.Character) end end
-    table.insert(wallIgnore, Camera)
-    wallRP.FilterDescendantsInstances = wallIgnore
-    wallRP.IgnoreWater = true
-
-    -- Straight line weapons (rockets, etc)
-    if gravity == 0 then
-        local dir = targetPos - origin
-        local hit = Workspace:Raycast(origin, dir, wallRP)
-        if hit then
-            local hitDist = (hit.Position - origin).Magnitude
-            local targetDist = dir.Magnitude
-            return hitDist >= targetDist - 2
-        end
-        return true
-    end
-
-    -- Arc weapons: simulate the actual projectile path
-    local aimPoint = CalculateAimPoint(origin, targetPos, speed, gravity, weaponName)
-    local aimDir = (aimPoint - origin).Unit
-    local hDir = Vector3.new(aimDir.X, 0, aimDir.Z)
-    if hDir.Magnitude < 0.01 then return false end
-    hDir = hDir.Unit
-    local pitch = math.asin(math.clamp(aimDir.Y, -1, 1))
-    local totalAngle = pitch + math.rad(initAngle)
-    local hSpeed = speed * math.cos(totalAngle)
-    local vSpeed = speed * math.sin(totalAngle)
-    local hDist = Vector3.new(targetPos.X - origin.X, 0, targetPos.Z - origin.Z).Magnitude
-    local totalTime = math.min(hDist / math.max(hSpeed, 1), lifetime)
-    local steps = 20
-    local prevPos = origin
-
-    for i = 1, steps do
-        local t = (i / steps) * totalTime
-        local hPos = origin + hDir * (hSpeed * t)
-        local yPos = origin.Y + vSpeed * t - 0.5 * gravity * t * t
-        local curPos = Vector3.new(hPos.X, yPos, hPos.Z)
-        local hit = Workspace:Raycast(prevPos, curPos - prevPos, wallRP)
-        if hit then
-            -- Check if the wall hit is close enough to the target
-            local hitDistToTarget = (hit.Position - targetPos).Magnitude
-            return hitDistToTarget < 5
-        end
-        prevPos = curPos
-    end
-
-    -- Check if final position is close to target
-    local finalDist = (prevPos - targetPos).Magnitude
-    return finalDist < 10
-end
-
-local function IsVelocityStale(player)
-    local hist = playerPositionHistory[player]
-    if not hist or #hist < 5 then return false end
-    local recent = hist[#hist]
-    local older = hist[math.max(1, #hist - 5)]
-    local dt = recent.Time - older.Time
-    if dt < 0.25 then return false end
-    local moved = (recent.Pos - older.Pos).Magnitude
-    local vel = GetPlayerVelocity(player)
-    -- Player has high velocity but hasn't actually moved much in 0.3s
-    if vel.Magnitude > 10 and moved < 2 then
-        return true
-    end
-    return false
-end
-
 
 ------------------------------------------------------------
 -- TARGET SELECTION
@@ -1200,7 +1167,6 @@ local function GetSilentAimTarget(playerData)
     local sortMode=Options.SilentAimSort and Options.SilentAimSort.Value or "Closest to Mouse"
     local selParts=Options.SilentAimBodyParts and Options.SilentAimBodyParts.Value or {Head=true}
     local sc=FrameCache.screenCenter
-
     if aimTargets["Players"] then
         for _,pd in ipairs(playerData) do
             if isSyringe then
@@ -1224,7 +1190,6 @@ local function GetSilentAimTarget(playerData)
             end
         end
     end
-
     if aimTargets["Sentry"] then
         for _,v in pairs(cachedSentries) do
             if not v.Parent then continue end
@@ -1244,7 +1209,6 @@ local function GetSilentAimTarget(playerData)
             if (sortMode=="Closest to Mouse" and d<=fov and d<bestDist) or (sortMode=="Closest Distance" and d<bestDist) then bestDist=d;bestPart=pp;bestPlayer=nil end
         end
     end
-
     if aimTargets["Stickybomb"] then
         local dest=Workspace:FindFirstChild("Destructable")
         if dest then for _,v in pairs(dest:GetChildren()) do
@@ -1262,12 +1226,10 @@ local function GetSilentAimTarget(playerData)
             end
         end end
     end
-
     if bestPart then
         local myHRP=GetHRP(GetLocalCharacter())
         if myHRP and (bestPart.Position-myHRP.Position).Magnitude<3 then return nil,nil end
     end
-
     return bestPart,bestPlayer
 end
 
@@ -1312,13 +1274,11 @@ local function UpdateSmoothAimArms()
     local vm=Camera:FindFirstChild("PrimaryVM");if not vm then return end
     local am=vm:FindFirstChild("CharacterArmsModel");if not am then return end
     local now=tick()
-
     if S.armReturning then
         local elapsed=now-S.armReturnStart
         if elapsed>=0.7 then S.armReturning=false;S.armTarget=nil;return end
         return
     end
-
     if S.shotConfirmed and (now-S.shotConfirmTime)<0.1 then
         if S.armTarget then AimArmsAtTarget(S.armTarget) end
         return
@@ -1326,7 +1286,6 @@ local function UpdateSmoothAimArms()
         S.shotConfirmed=false;S.armReturning=true;S.armReturnStart=now
         return
     end
-
     if S.armTarget then
         local elapsed=now-S.armSmoothStart
         local alpha=math.clamp(elapsed/0.15,0,1)
@@ -1366,21 +1325,21 @@ local function SetupRemoteFinder()
 end
 
 ------------------------------------------------------------
--- GET AIM CFRAME (shared between silent aim and ragebot)
+-- GET AIM CFRAME
 ------------------------------------------------------------
-local function GetProjectileAimCFrame(target, targetPlr, weapon)
-    if weapon == "Huntsman" then
-        local tChar = target:FindFirstAncestorOfClass("Model")
-        if tChar then local head = tChar:FindFirstChild("Head"); if head and IsPartVisible(head) then target = head end end
+local function GetProjectileAimCFrame(target,targetPlr,weapon)
+    if weapon=="Huntsman" then
+        local tChar=target:FindFirstAncestorOfClass("Model")
+        if tChar then local head=tChar:FindFirstChild("Head");if head and IsPartVisible(head) then target=head end end
     end
-    local predicted, pt = PredictProjectileHit(target, targetPlr, weapon)
-    if not predicted then return nil, nil end
-    if weapon == "Huntsman" then predicted = predicted + Vector3.new(0, 1.5, 0) end
-    local spd, grav = GetCurrentWeaponSpeed(weapon)
-    if grav and grav > 0 then
-        return CFrame.lookAt(FrameCache.camPos, CalculateAimPoint(FrameCache.camPos, predicted, spd, grav, weapon)), predicted
+    local predicted,pt=PredictProjectileHit(target,targetPlr,weapon)
+    if not predicted then return nil,nil end
+    if weapon=="Huntsman" then predicted=predicted+Vector3.new(0,1.5,0) end
+    local spd,grav=GetCurrentWeaponSpeed(weapon)
+    if grav and grav>0 then
+        return CFrame.lookAt(FrameCache.camPos,CalculateAimPoint(FrameCache.camPos,predicted,spd,grav,weapon)),predicted
     else
-        return CFrame.lookAt(FrameCache.camPos, predicted), predicted
+        return CFrame.lookAt(FrameCache.camPos,predicted),predicted
     end
 end
 
@@ -1398,24 +1357,23 @@ task.spawn(function()
                 if BlacklistedWeapons[weapon] then return orig(self2,...) end
                 local isProj=ProjectileWeapons[weapon]~=nil or ChargeWeapons[weapon]~=nil
 
-                -- Silent aim
                 if Config.SilentAim.Enabled and S.silentAimKeyActive then
                     local target=FrameCache.silentTarget
                     local targetPlr=FrameCache.silentTargetPlr
                     if target then
                         if isProj and targetPlr then
-                            local cf, aimPos = GetProjectileAimCFrame(target, targetPlr, weapon)
-                            if aimPos then
-                                FrameCache.predictedPos = aimPos
+                            local cf,aimPos=GetProjectileAimCFrame(target,targetPlr,weapon)
+                            if cf and aimPos then
+                                FrameCache.predictedPos=aimPos
                                 if Toggles.SilentAimArms and Toggles.SilentAimArms.Value then
-                                    local mode = Options.SilentAimArmsMode and Options.SilentAimArmsMode.Value or "Snap"
-                                    if mode == "Snap" then AimArmsAtTarget(aimPos)
-                                    else S.armTarget = aimPos; S.armSmoothStart = tick() end
+                                    local mode=Options.SilentAimArmsMode and Options.SilentAimArmsMode.Value or "Snap"
+                                    if mode=="Snap" then AimArmsAtTarget(aimPos)
+                                    else S.armTarget=aimPos;S.armSmoothStart=tick() end
                                 end
                                 return cf
+                            else
+                                return orig(self2,...)
                             end
-                            -- Prediction returned nil (all positions blocked), skip shot
-                            return orig(self2, ...)
                         else
                             if Toggles.SilentAimArms and Toggles.SilentAimArms.Value then
                                 local mode=Options.SilentAimArmsMode and Options.SilentAimArmsMode.Value or "Snap"
@@ -1427,7 +1385,6 @@ task.spawn(function()
                     end
                 end
 
-                -- Auto backstab
                 if Toggles.AutoBackstab and Toggles.AutoBackstab.Value then
                     local myClass=GetLocalClass();local myWeapon=GetLocalWeapon()
                     if myClass=="Agent" and BackstabWeapons[myWeapon] then
@@ -1449,7 +1406,6 @@ task.spawn(function()
                     end
                 end
 
-                -- Auto melee aim (does not stack with auto backstab)
                 if Toggles.AutoMelee and Toggles.AutoMelee.Value then
                     local myWeapon=GetLocalWeapon()
                     if MeleeWeapons[myWeapon] and not (Toggles.AutoBackstab and Toggles.AutoBackstab.Value and GetLocalClass()=="Agent" and BackstabWeapons[myWeapon]) then
@@ -1470,23 +1426,23 @@ task.spawn(function()
                     end
                 end
 
-                -- Ragebot
-                    if Config.Ragebot.Enabled and WeaponAllowed() then
-                        local part = FrameCache.ragebotTarget
-                        local partPlr = FrameCache.ragebotTargetPlr
-                        if part then
-                            if isProj and partPlr then
-                                local cf, aimPos = GetProjectileAimCFrame(part, partPlr, weapon)
-                                if aimPos then
-                                    FrameCache.predictedPos = aimPos
-                                    return cf
-                                end
-                                return orig(self2, ...)
+                if Config.Ragebot.Enabled and WeaponAllowed() then
+                    local part=FrameCache.ragebotTarget
+                    local partPlr=FrameCache.ragebotTargetPlr
+                    if part then
+                        if isProj and partPlr then
+                            local cf,aimPos=GetProjectileAimCFrame(part,partPlr,weapon)
+                            if cf and aimPos then
+                                FrameCache.predictedPos=aimPos
+                                return cf
                             else
-                                return CFrame.lookAt(FrameCache.camPos, part.Position)
+                                return orig(self2,...)
                             end
+                        else
+                            return CFrame.lookAt(FrameCache.camPos,part.Position)
                         end
                     end
+                end
 
                 return orig(self2,...)
             end
@@ -1508,7 +1464,6 @@ do
     OldNamecall=hookmetamethod(game,"__namecall",function(self2,...)
         local method=getnamecallmethod()
 
-        -- Shooting remote detection
         if not S.shootingRemoteFound and remoteSet[self2] and (method=="FireServer" or method=="InvokeServer") then
             local args={...}
             if #args>=3 then
@@ -1526,7 +1481,6 @@ do
             end
         end
 
-        -- Shot confirmed (for prediction visuals + smooth aim arms)
         if S.shootingRemoteFound and self2==S.shootingRemote and not checkcaller() and (method=="FireServer" or method=="InvokeServer") then
             local args={...}
             if #args>=2 and type(args[2])=="number" then
@@ -1541,16 +1495,17 @@ do
                             if PathVisualWeapons[weapon] then
                                 local target=FrameCache.silentTarget or FrameCache.ragebotTarget
                                 local targetPlr=FrameCache.silentTargetPlr or FrameCache.ragebotTargetPlr
-                            if target and targetPlr then
-                                local predicted, travelTime = PredictProjectileHit(target, targetPlr, weapon)
-                                if predicted then
-                                    local origin2 = (Camera.CFrame * CFrame.new(PROJECTILE_OFFSET)).Position
-                                    local pathPts = GenerateProjectilePath(origin2, predicted, weapon, 40)
-                                    activePredictionVisuals[tick()] = {
-                                        TargetPos = predicted, TravelTime = travelTime,
-                                        SpawnTime = tick(), FadeTime = travelTime + 0.3,
-                                        PathPoints = pathPts, Weapon = weapon,
-                                    }
+                                if target and targetPlr then
+                                    local predicted,travelTime=PredictProjectileHit(target,targetPlr,weapon)
+                                    if predicted then
+                                        local origin2=(Camera.CFrame*CFrame.new(PROJECTILE_OFFSET)).Position
+                                        local pathPts=GenerateProjectilePath(origin2,predicted,weapon,40)
+                                        activePredictionVisuals[tick()]={
+                                            TargetPos=predicted,TravelTime=travelTime,
+                                            SpawnTime=tick(),FadeTime=travelTime+0.3,
+                                            PathPoints=pathPts,Weapon=weapon,
+                                        }
+                                    end
                                 end
                             end
                         end
@@ -1564,7 +1519,6 @@ do
 end
 
 task.spawn(function() task.wait(2);SetupRemoteFinder() end)
-
 ------------------------------------------------------------
 -- NO SPREAD
 ------------------------------------------------------------
