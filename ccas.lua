@@ -181,6 +181,7 @@ local ProjectileWeapons={
     ["Apollo"]={Speed=125,Gravity=3,InitialAngle=0,Lifetime=99,Type="Syringe"},
     ["Big Bite"]={Speed=64.75,Gravity=1,InitialAngle=0,Lifetime=99,Type="Rocket"},
     ["Night Sky Ignitor"]={Speed=123.75,Gravity=1,InitialAngle=0,Lifetime=99,Type="Rocket"},
+    ["Twin-Turbulence"]={Speed=76,Gravity=42.6,InitialAngle=7.92,Lifetime=0.8,Type="Grenade"},
 }
 
 local ChargeWeapons={
@@ -195,7 +196,7 @@ local ArcWeapons={
     ["Grenade Launcher"]=true,["Ultimatum"]=true,
     ["Iron Bomber"]=true,["Loose Cannon"]=true,["Loch-n-Load"]=true,
     ["Huntsman"]=true,["Flare Gun"]=true,["Maverick"]=true,["Detonator"]=true,["Milk Pistol"]=true,["Syringe Crossbow"]=true,
-    ["Rescue Ranger"]=true,["Apollo"]=true
+    ["Rescue Ranger"]=true,["Apollo"]=true,["Twin-Turblence"]=true
 }
 
 local BackstabWeapons={
@@ -266,6 +267,7 @@ local ProjectileCFrameOffsets={
     ["Apollo"]=CFrame.new(0.5, 0.1875, 0.5),
     ["Big Bite"]=CFrame.new(0.75, -0.1875, -0.275),
     ["Night Sky Ignitor"]=CFrame.new(0.75, -0.1875, 1.635),
+    ["Twin-Turbulence"]=CFrame.new(0.5, -0.375, 0),
 }
 
 -- Projectile sizes: Rockets = 3,1,1 | Grenades = 2,1,1 | Rest = 1,1,1
