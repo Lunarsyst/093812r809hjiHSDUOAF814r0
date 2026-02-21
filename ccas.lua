@@ -201,7 +201,7 @@ local ArcWeapons={
 
 local BackstabWeapons={
     ["Knife"]=true,["Conniver's Kunai"]=true,["Your Eternal Reward"]=true,
-    ["Icicle"]=true,["Swift Stiletto"]=true,["The Wraith"]=true,
+    ["Icicle"]=true,["Swift Stiletto"]=true,["Wraith"]=true,
     ["Big Earner"]=true,["Spy-cicle"]=true,["Wanga Prick"]=true,["Karambit"]=true,["Golden Knife"]=true
 }
 
