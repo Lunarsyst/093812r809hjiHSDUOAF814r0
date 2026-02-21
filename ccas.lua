@@ -322,8 +322,8 @@ getgenv().Config={
 -- WINDOW & TABS
 ------------------------------------------------------------
 local Window=Library:CreateWindow({
-    Title='                                                                   Aegis | Typical Colors 2',
-    Center=true,AutoShow=true,TabPadding=4,MenuFadeTime=0.2
+    Title='Aegis | Typical Colors 2',
+    Center=true,AutoShow=true,TabPadding=0,MenuFadeTime=0.2
 })
 
 local Tabs={
@@ -332,7 +332,7 @@ local Tabs={
     Misc=Window:AddTab('Misc'),
     Exploits=Window:AddTab('Exploits'),
     Settings=Window:AddTab('Settings'),
-    ['UI Settings']=Window:AddTab('UI Settings'),
+    ['UI Settings']=Window:AddTab('UI'),
 }
 
 ------------------------------------------------------------
