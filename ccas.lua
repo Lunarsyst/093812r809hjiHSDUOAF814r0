@@ -961,7 +961,7 @@ local function PredictProjectileHit(targetPart, player, weaponName)
         travelTime = math.min(travelTime, lifetime)
         if armTime and armTime > 0 then travelTime = math.max(travelTime, armTime) end
 
-        local totalTime = travelTime + ping * 2
+        local totalTime = travelTime + ping * 1
         local simSteps  = math.clamp(math.floor(totalTime / 0.033), 5, 30)
         local simResult = SimulateTargetPosition(player, totalTime, simSteps, rp, true)
         if simResult then predictedHRP = simResult else return targetPart.Position, travelTime end
@@ -1194,7 +1194,7 @@ local function SetupRemoteFinder()
     for _, child in ipairs(S.bannerFolder:GetChildren()) do
         if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") then remoteSet[child] = true end
     end
-    Notify("Shoot your weapon to detect the remote...", 5)
+    Notify("this notification had a meaning but is now useless :)", 5)
 end
 
 task.spawn(function() task.wait(2); SetupRemoteFinder() end)
