@@ -14,7 +14,7 @@ if setthreadidentity then setthreadidentity(8) end
 ------------------------------------------------------------
 -- LIBRARY
 ------------------------------------------------------------
-local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+local repo        = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local Library     = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
 local SaveManager  = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
@@ -25,17 +25,36 @@ local Toggles = Library.Toggles
 Library.ShowToggleFrameInKeybinds = true
 
 ------------------------------------------------------------
+-- CHEATER LIST (external loadstring)
+-- The linked script should set:
+--   getgenv().AegisCheaterList = { [userId] = "DisplayName", ... }
+-- If the link hasn't been set yet, this is a no-op.
+------------------------------------------------------------
+do
+    local CHEATER_LIST_URL = "" -- << paste your raw URL here
+    if CHEATER_LIST_URL ~= "" then
+        pcall(function() loadstring(game:HttpGet(CHEATER_LIST_URL))() end)
+    end
+end
+-- AegisCheaterList is now either set by the above loadstring or nil.
+local CheaterList = getgenv().AegisCheaterList or {}
+
+local function IsCheater(player)
+    return CheaterList[player.UserId] ~= nil
+end
+
+------------------------------------------------------------
 -- SERVICES
 ------------------------------------------------------------
-local Players           = game:GetService("Players")
-local RunService        = game:GetService("RunService")
-local UserInputService  = game:GetService("UserInputService")
-local Lighting          = game:GetService("Lighting")
-local Workspace         = game:GetService("Workspace")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players            = game:GetService("Players")
+local RunService         = game:GetService("RunService")
+local UserInputService   = game:GetService("UserInputService")
+local Lighting           = game:GetService("Lighting")
+local Workspace          = game:GetService("Workspace")
+local ReplicatedStorage  = game:GetService("ReplicatedStorage")
 local VirtualInputManager = game:GetService("VirtualInputManager")
-local Stats             = game:GetService("Stats")
-local LogService        = game:GetService("LogService")
+local Stats              = game:GetService("Stats")
+local LogService         = game:GetService("LogService")
 
 local Camera      = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
@@ -52,7 +71,24 @@ local MELEE_RANGE_DEMOKNIGHT = 9
 local TC2_GRAVITY            = 50
 local TC2_JUMP_POWER         = 16
 local PROJECTILE_OFFSET      = Vector3.new(0.32, -0.14, -0.56)
-local SIM_PARAMS_CACHE_TTL   = 0.5   -- seconds
+local SIM_PARAMS_CACHE_TTL   = 0.5
+
+------------------------------------------------------------
+-- CACHED PLAYER LIST
+-- Rebuilt only on join/leave, never per-frame
+------------------------------------------------------------
+local cachedPlayerList = {}
+do
+    for _, p in ipairs(Players:GetPlayers()) do table.insert(cachedPlayerList, p) end
+    Players.PlayerAdded:Connect(function(p)
+        table.insert(cachedPlayerList, p)
+    end)
+    Players.PlayerRemoving:Connect(function(p)
+        for i = #cachedPlayerList, 1, -1 do
+            if cachedPlayerList[i] == p then table.remove(cachedPlayerList, i) end
+        end
+    end)
+end
 
 ------------------------------------------------------------
 -- STATE
@@ -62,36 +98,27 @@ local S = {
     shooting = false, lastShotTime = 0, shotInterval = 0.033,
     lastHitTime = 0, hitCooldown = 0.1,
     jitterDir = 1, spinAngle = 0, lastJitterUpdate = 0,
-    AdsEnabled = false, ADSMultiplier = 1,
     fps = 0, frames = 0,
     chargeStartTime = 0, isCharging = false, currentChargePercent = 0,
     lastAgentNotif = 0,
-    shootingRemote = nil, shootingRemoteFound = false,
     silentAimKeyActive = false,
     warpActive = false, lastWarpTime = 0, lastBackstabTarget = nil,
-    lastChamsProps = {}, lastWorldChamsUpdate = 0, lastProjChamsUpdate = 0,
+    lastWorldChamsUpdate = 0, lastProjChamsUpdate = 0,
     lastUsernameUpdate = 0, lastVelocityUpdate = 0, lastHitDebugNotif = 0,
     lastAirblastTime = 0,
     noSpreadSetup = false, speedConnection = nil,
     _guiLoaded = false,
     ads = nil, adsmodifier = nil, equipped = nil, kirk = nil, ClassValue = nil,
     mobileToggleButton = nil,
-    -- Aim Arms state
-    armTarget = nil,
-    armHoldStart = nil,   -- when we started holding the aim
-    armReturning = false,
-    armReturnStart = nil,
-    armOriginalCF = nil,  -- camera CFrame at the moment we first aimed
-    shotConfirmed = false, shotConfirmTime = 0,
+    armTarget = nil, armHoldStart = nil, armReturning = false,
+    armReturnStart = nil, armOriginalCF = nil,
     lastMeleeTarget = nil,
-    -- SimRayParams cache
     simRayParamsCache = nil, simRayParamsCacheTime = 0,
+
 }
 
 local healthCache         = {}
 local visibilityCache     = {}
-local lastKnownAmmo       = {}
-local remoteSet           = {}
 local playerVelocities    = {}
 local playerAccelerations = {}
 local playerVerticalHistory  = {}
@@ -102,6 +129,11 @@ local cachedDispensers   = {}
 local cachedTeleporters  = {}
 local cachedAmmo         = {}
 local cachedHP           = {}
+-- Chams cache keyed on player (not char) so respawns don't cause stale entries
+local PlayerChamsCache   = {}  -- [player] = { hl=Highlight, char=Model }
+local lastChamsProps     = {}  -- [player] = { fc, oc, ft, ot, dm }
+local WorldChamsCache    = {}
+local ProjectileChamsCache = {}
 
 local FrameCache = {
     playerData = nil,
@@ -109,8 +141,6 @@ local FrameCache = {
     camPos = Vector3.zero, camCF = CFrame.new(),
     screenCenter = Vector2.new(),
     frameNum = 0,
-    -- per-player screen data cached from BuildPlayerData
-    playerScreenData = {},
 }
 
 ------------------------------------------------------------
@@ -168,12 +198,6 @@ local HitboxTables = {
     Feet  = {"LeftFoot","RightFoot"},
 }
 
-local AllBodyPartNames = {
-    "Head","HeadHB","UpperTorso","HumanoidRootPart","LowerTorso",
-    "LeftUpperArm","RightUpperArm","LeftLowerArm","RightLowerArm","LeftHand","RightHand",
-    "LeftUpperLeg","RightUpperLeg","LeftLowerLeg","RightLowerLeg","LeftFoot","RightFoot",
-}
-
 local SkeletonConnections = {
     {"Head","UpperTorso"},{"UpperTorso","LowerTorso"},
     {"UpperTorso","LeftUpperArm"},{"LeftUpperArm","LeftLowerArm"},{"LeftLowerArm","LeftHand"},
@@ -183,31 +207,31 @@ local SkeletonConnections = {
 }
 
 local ProjectileWeapons = {
-    ["Direct Hit"]      = {Speed=123.75, Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["Maverick"]        = {Speed=64.75,  Gravity=15,   InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["Rocket Launcher"] = {Speed=64.75,  Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["Double Trouble"]  = {Speed=64.75,  Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["Blackbox"]        = {Speed=68.75,  Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["Original"]        = {Speed=68.75,  Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["Cow Mangler 5000"]= {Speed=64.75,  Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["Wreckers Yard"]   = {Speed=64.75,  Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["G-Bomb"]          = {Speed=44.6875,Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["Airstrike"]       = {Speed=64.75,  Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket", AirSpeed=110},
-    ["Liberty Launcher"]= {Speed=96.25,  Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["Grenade Launcher"]= {Speed=76,     Gravity=42.6, InitialAngle=7.92, Lifetime=0.8, Type="Grenade"},
-    ["Ultimatum"]       = {Speed=76,     Gravity=42.6, InitialAngle=7.92, Lifetime=0.8, Type="Grenade"},
-    ["Iron Bomber"]     = {Speed=76,     Gravity=42.6, InitialAngle=7.92, Lifetime=0.8, Type="Grenade"},
-    ["Loose Cannon"]    = {Speed=76,     Gravity=42.6, InitialAngle=7.92, Lifetime=0.8, Type="Grenade"},
-    ["Loch-n-Load"]     = {Speed=96,     Gravity=42.6, InitialAngle=5.412,Lifetime=99,  Type="Grenade"},
-    ["Syringe Crossbow"]= {Speed=125,    Gravity=3,    InitialAngle=0,    Lifetime=99,  Type="Syringe"},
-    ["Milk Pistol"]     = {Speed=100,    Gravity=3,    InitialAngle=0,    Lifetime=99,  Type="Grenade"},
-    ["Flare Gun"]       = {Speed=125,    Gravity=10,   InitialAngle=0,    Lifetime=99,  Type="Flare"},
-    ["Detonator"]       = {Speed=125,    Gravity=10,   InitialAngle=0,    Lifetime=99,  Type="Flare"},
-    ["Rescue Ranger"]   = {Speed=150,    Gravity=3,    InitialAngle=0,    Lifetime=99,  Type="Syringe"},
-    ["Apollo"]          = {Speed=125,    Gravity=3,    InitialAngle=0,    Lifetime=99,  Type="Syringe"},
-    ["Big Bite"]        = {Speed=64.75,  Gravity=1,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["Night Sky Ignitor"]={Speed=123.75, Gravity=1,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["Twin-Turbolence"] = {Speed=76,     Gravity=42.6, InitialAngle=7.92, Lifetime=0.8, Type="Grenade"},
+    ["Direct Hit"]       = {Speed=123.75, Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Maverick"]         = {Speed=64.75,  Gravity=15,   InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Rocket Launcher"]  = {Speed=64.75,  Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Double Trouble"]   = {Speed=64.75,  Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Blackbox"]         = {Speed=68.75,  Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Original"]         = {Speed=68.75,  Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Cow Mangler 5000"] = {Speed=64.75,  Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Wreckers Yard"]    = {Speed=64.75,  Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["G-Bomb"]           = {Speed=44.6875,Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Airstrike"]        = {Speed=64.75,  Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket", AirSpeed=110},
+    ["Liberty Launcher"] = {Speed=96.25,  Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Grenade Launcher"] = {Speed=76,     Gravity=42.6, InitialAngle=7.92, Lifetime=0.8, Type="Grenade"},
+    ["Ultimatum"]        = {Speed=76,     Gravity=42.6, InitialAngle=7.92, Lifetime=0.8, Type="Grenade"},
+    ["Iron Bomber"]      = {Speed=76,     Gravity=42.6, InitialAngle=7.92, Lifetime=0.8, Type="Grenade"},
+    ["Loose Cannon"]     = {Speed=76,     Gravity=42.6, InitialAngle=7.92, Lifetime=0.8, Type="Grenade"},
+    ["Loch-n-Load"]      = {Speed=96,     Gravity=42.6, InitialAngle=5.412,Lifetime=99,  Type="Grenade"},
+    ["Syringe Crossbow"] = {Speed=125,    Gravity=3,    InitialAngle=0,    Lifetime=99,  Type="Syringe"},
+    ["Milk Pistol"]      = {Speed=100,    Gravity=3,    InitialAngle=0,    Lifetime=99,  Type="Grenade"},
+    ["Flare Gun"]        = {Speed=125,    Gravity=10,   InitialAngle=0,    Lifetime=99,  Type="Flare"},
+    ["Detonator"]        = {Speed=125,    Gravity=10,   InitialAngle=0,    Lifetime=99,  Type="Flare"},
+    ["Rescue Ranger"]    = {Speed=150,    Gravity=3,    InitialAngle=0,    Lifetime=99,  Type="Syringe"},
+    ["Apollo"]           = {Speed=125,    Gravity=3,    InitialAngle=0,    Lifetime=99,  Type="Syringe"},
+    ["Big Bite"]         = {Speed=64.75,  Gravity=1,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Night Sky Ignitor"]= {Speed=123.75, Gravity=1,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Twin-Turbolence"]  = {Speed=76,     Gravity=42.6, InitialAngle=7.92, Lifetime=0.8, Type="Grenade"},
 }
 
 local ChargeWeapons = {
@@ -243,10 +267,6 @@ local MeleeWeapons = {
     ["Saw"]=true,["Wrench"]=true,["Machete"]=true,["The Black Death"]=true,["Eyelander"]=true,
 }
 
-local AirblastWeapons = {
-    ["Degreaser"]=true,["The Interceptor"]=true,["Phlogistinator"]=true,["Flamethrower"]=true,
-}
-
 local BlacklistedWeapons = {
     ["Sticky Jumper"]=true,["Rocket Jumper"]=true,["Overdrive"]=true,
     ["The Mercy Kill"]=true,["Friendly Fire Foiler"]=true,
@@ -259,66 +279,53 @@ local BlacklistedWeapons = {
     ["Mad Milk"]=true,["Witches Brew"]=true,["Bloxy Cola"]=true,
 }
 
-local ProjectileCFrameOffsets = {
-    ["Rocket Launcher"]=CFrame.new(0.75,-0.1875,-0.275),
-    ["Direct Hit"]=CFrame.new(0.75,-0.1875,1.635),
-    ["Blackbox"]=CFrame.new(0.75,-0.1875,-0.265),
-    ["Cow Mangler 5000"]=CFrame.new(0.75,-0.1875,0.35),
-    ["G-Bomb"]=CFrame.new(0.75,-0.1875,0.52),
-    ["Original"]=CFrame.new(0,-1,1.191),
-    ["Liberty Launcher"]=CFrame.new(0.75,-0.1877,1.3),
-    ["Maverick"]=CFrame.new(0.75,-0.1875,0),
-    ["Airstrike"]=CFrame.new(0.75,-0.1877,1.3),
-    ["Flare Gun"]=CFrame.new(0.75,-0.1875,0.41),
-    ["Detonator"]=CFrame.new(0.75,-0.1875,0.2),
-    ["Grenade Launcher"]=CFrame.new(0.5,-0.375,0),
-    ["Loch-n-Load"]=CFrame.new(0.5,-0.375,0),
-    ["Loose Cannon"]=CFrame.new(0.5,-0.375,0),
-    ["Iron Bomber"]=CFrame.new(0.5,-0.375,0),
-    ["Ultimatum"]=CFrame.new(0.5,-0.375,0),
-    ["Rescue Ranger"]=CFrame.new(0.5,0.2,0.5),
-    ["Milk Pistol"]=CFrame.new(0.5,0.1875,0.5),
-    ["Syringe Crossbow"]=CFrame.new(0.5,0.1875,0.5),
-    ["Huntsman"]=CFrame.new(0.5,-0.1875,-2),
-    ["Apollo"]=CFrame.new(0.5,0.1875,0.5),
-    ["Big Bite"]=CFrame.new(0.75,-0.1875,-0.275),
-    ["Night Sky Ignitor"]=CFrame.new(0.75,-0.1875,1.635),
-    ["Twin-Turbolence"]=CFrame.new(0.5,-0.375,0),
-}
-
-local StatusLetters = {
-    Bleeding   = {Letter="B", Color=Color3.fromRGB(255,50,50)},
-    Cloaked    = {Letter="C", Color=Color3.fromRGB(150,150,255)},
-    Engulfed   = {Letter="E", Color=Color3.fromRGB(255,150,0)},
-    Lemoned    = {Letter="L", Color=Color3.fromRGB(255,255,0)},
-    Milked     = {Letter="M", Color=Color3.fromRGB(230,230,230)},
-    Ubercharged= {Letter="U", Color=Color3.fromRGB(255,215,0)},
-}
-
-local CLASS_MAX_HP = {
-    Flanker=125, Mechanic=125, Brute=300, Annihilator=175,
-    Marksman=125, Doctor=150, Arsonist=175, Agent=125,
-    Trooper=200, Unknown=150,
-}
-
 local projectileNames = {
     "Bauble","Shuriken","Rocket","Grenade","Arrow_Syringe","Sentry Rocket",
     "Arrow","Flare Gun","Baseball","Snowballs","Milk Pistol",
+}
+
+-- Rainbow color helper for Ubercharged status
+local function GetRainbowColor()
+    local t = tick() * 1.5  -- speed
+    local h = t % 1
+    local r, g, b
+    local i = math.floor(h * 6)
+    local f = h * 6 - i
+    local q = 1 - f
+    if     i % 6 == 0 then r,g,b = 1,f,0
+    elseif i % 6 == 1 then r,g,b = q,1,0
+    elseif i % 6 == 2 then r,g,b = 0,1,f
+    elseif i % 6 == 3 then r,g,b = 0,q,1
+    elseif i % 6 == 4 then r,g,b = f,0,1
+    else                    r,g,b = 1,0,q end
+    return Color3.new(r,g,b)
+end
+
+-- Status effects from workspace.PlayerName.Conditions attributes
+-- Matches exactly what TC2 uses (confirmed via screenshot)
+local StatusLetters = {
+    Bleeding    = {Letter="B",  Color=Color3.fromRGB(255,50,50)},
+    Cloaked     = {Letter="C",  Color=Color3.fromRGB(150,150,255)},
+    Coated      = {Letter="Co", Color=Color3.fromRGB(180,100,255)},
+    Engulfed    = {Letter="E",  Color=Color3.fromRGB(255,150,0)},
+    Lemoned     = {Letter="L",  Color=Color3.fromRGB(255,255,0)},
+    Milked      = {Letter="M",  Color=Color3.fromRGB(230,230,230)},
+    Poisoned    = {Letter="P",  Color=Color3.fromRGB(100,200,50)},
+    Ubercharged = {Letter="U",  Color=Color3.fromRGB(255,215,0)},
 }
 
 ------------------------------------------------------------
 -- CONFIG
 ------------------------------------------------------------
 getgenv().Config = {
-    SilentAim = {Enabled=false, FOV=200},
-    AntiAim   = {Enabled=false, Mode="jitter", JitterAngle=90, JitterSpeed=15, AntiAimSpeed=180},
-    Wallbang  = {Enable=false},
-    NoSpread  = {Enable=false, Multiplier=0.2},
-    Speed     = {Enable=false, Value=300},
-    AimArms   = {Enable=false},
+    SilentAim     = {Enabled=false, FOV=200},
+    AntiAim       = {Enabled=false, Mode="jitter", JitterAngle=90, JitterSpeed=15, AntiAimSpeed=180},
+    Wallbang      = {Enable=false},
+    NoSpread      = {Enable=false, Multiplier=0.2},
+    Speed         = {Enable=false, Value=300},
     Notifications = {ShowHits=false},
-    Flags     = {Enabled=false, ShowDamage=false, ShowRemainingHealth=false, ShowName=false},
-    AutoUber  = {Enabled=false, HealthPercent=40, Condition="Both"},
+    Flags         = {Enabled=false, ShowDamage=false, ShowRemainingHealth=false, ShowName=false},
+    AutoUber      = {Enabled=false, HealthPercent=40, Condition="Both"},
 }
 
 ------------------------------------------------------------
@@ -332,12 +339,12 @@ local Window = Library:CreateWindow({
 })
 
 local Tabs = {
-    Aimbot   = Window:AddTab("Aimbot",   "crosshair"),
-    Visuals  = Window:AddTab("Visuals",  "eye"),
-    Misc     = Window:AddTab("Misc",     "wrench"),
-    Exploits = Window:AddTab("Exploits", "zap"),
-    Settings = Window:AddTab("Settings", "sliders-horizontal"),
-    ["UI Settings"] = Window:AddTab("UI", "settings"),
+    Aimbot        = Window:AddTab("Aimbot",   "crosshair"),
+    Visuals       = Window:AddTab("Visuals",  "eye"),
+    Misc          = Window:AddTab("Misc",     "wrench"),
+    Exploits      = Window:AddTab("Exploits", "zap"),
+    Settings      = Window:AddTab("Settings", "sliders-horizontal"),
+    ["UI Settings"] = Window:AddTab("UI",     "settings"),
 }
 
 ------------------------------------------------------------
@@ -350,9 +357,9 @@ end
 ------------------------------------------------------------
 -- UTILITY
 ------------------------------------------------------------
-local function GetCharacter(p)  return p and p.Character end
-local function GetHumanoid(c)   return c and c:FindFirstChildOfClass("Humanoid") end
-local function GetHRP(c)        return c and c:FindFirstChild("HumanoidRootPart") end
+local function GetCharacter(p)    return p and p.Character end
+local function GetHumanoid(c)     return c and c:FindFirstChildOfClass("Humanoid") end
+local function GetHRP(c)          return c and c:FindFirstChild("HumanoidRootPart") end
 local function GetLocalCharacter() return GetCharacter(LocalPlayer) end
 
 local function IsPlayerAlive(p)
@@ -363,7 +370,7 @@ end
 
 local function IsEnemy(p)  return p and p.Team ~= LocalPlayer.Team end
 local function IsFriend(p)
-    local ok,r = pcall(function() return LocalPlayer:IsFriendsWith(p.UserId) end)
+    local ok, r = pcall(function() return LocalPlayer:IsFriendsWith(p.UserId) end)
     return ok and r
 end
 
@@ -373,7 +380,9 @@ local function WorldToViewportPoint(pos)
     return Vector2.new(sp.X, sp.Y), os, sp.Z
 end
 
--- Visibility raycast (one per part per frame via cache)
+------------------------------------------------------------
+-- VISIBILITY (with early-exit dot product to skip off-screen raycasts)
+------------------------------------------------------------
 local raycastParams = RaycastParams.new()
 raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
 raycastParams.IgnoreWater = true
@@ -381,10 +390,14 @@ raycastParams.IgnoreWater = true
 local function IsPartVisible(part)
     if not part then return false end
     if visibilityCache[part] ~= nil then return visibilityCache[part] end
+    -- Skip raycast entirely if part is behind camera (~100° off screen)
+    local toDir = part.Position - FrameCache.camPos
+    if toDir.Magnitude > 0.1 and FrameCache.camCF.LookVector:Dot(toDir.Unit) < -0.17 then
+        visibilityCache[part] = false; return false
+    end
     local lc = GetLocalCharacter(); if not lc then return false end
     raycastParams.FilterDescendantsInstances = {lc}
-    local origin = FrameCache.camPos
-    local result = Workspace:Raycast(origin, part.Position - origin, raycastParams)
+    local result = Workspace:Raycast(FrameCache.camPos, toDir, raycastParams)
     local vis = not result or result.Instance:IsDescendantOf(part.Parent)
     visibilityCache[part] = vis
     return vis
@@ -400,9 +413,21 @@ local function IsCharacterInvisible(char)
 end
 
 ------------------------------------------------------------
--- FIXED GetBestVisiblePart
--- Sort mode comes from SilentAimSort dropdown, NOT the body parts multi-select.
--- No AllBodyParts fallback — returns nil if none of the selected groups are visible.
+-- REACH CHECK (used by melee/backstab to verify LOS)
+------------------------------------------------------------
+local function HasLineOfSight(fromPos, toPos)
+    local rp = RaycastParams.new()
+    rp.FilterType = Enum.RaycastFilterType.Blacklist
+    rp.IgnoreWater = true
+    local lc = GetLocalCharacter()
+    rp.FilterDescendantsInstances = lc and {lc} or {}
+    local dir = toPos - fromPos
+    local hit = Workspace:Raycast(fromPos, dir, rp)
+    return not hit or (hit.Position - fromPos).Magnitude >= dir.Magnitude - 1
+end
+
+------------------------------------------------------------
+-- GetBestVisiblePart (fixed — no fallback, sort from dropdown)
 ------------------------------------------------------------
 local function GetBestVisiblePart(char, selectedGroups, sortMode)
     if not char or char == LocalPlayer.Character then return nil end
@@ -413,13 +438,10 @@ local function GetBestVisiblePart(char, selectedGroups, sortMode)
         if selectedGroups[groupName] then
             for _, partName in ipairs(HitboxTables[groupName] or {}) do
                 local p = char:FindFirstChild(partName)
-                if p and IsPartVisible(p) then
-                    table.insert(candidates, p)
-                end
+                if p and IsPartVisible(p) then table.insert(candidates, p) end
             end
         end
     end
-
     if #candidates == 0 then return nil end
 
     if sortMode == "Closest to Mouse" then
@@ -433,7 +455,6 @@ local function GetBestVisiblePart(char, selectedGroups, sortMode)
         end
         return best
     else
-        -- Closest Distance — candidates already ordered head-to-feet; pick shortest world dist
         local best, bestDist = nil, math.huge
         for _, p in ipairs(candidates) do
             local d = (FrameCache.camPos - p.Position).Magnitude
@@ -452,7 +473,18 @@ local function GetPlayerClass(p)
     return "Unknown"
 end
 
-local function GetClassMaxHP(player) return CLASS_MAX_HP[GetPlayerClass(player)] or 150 end
+-- Read MaxHealth directly from workspace character, fallback to humanoid MaxHealth
+local function GetPlayerMaxHP(player)
+    local ok, val = pcall(function()
+        return Workspace[player.Name].MaxHealth.Value
+    end)
+    if ok and val and val > 0 then return val end
+    local char = player.Character
+    if char then
+        local hum = GetHumanoid(char); if hum then return hum.MaxHealth end
+    end
+    return 150
+end
 
 local function GetPlayerWeapon(char)
     if not char then return "Unknown" end
@@ -461,7 +493,7 @@ local function GetPlayerWeapon(char)
     return "Unknown"
 end
 
-local function GetLocalWeapon() return GetPlayerWeapon(GetLocalCharacter()) end
+local function GetLocalWeapon()  return GetPlayerWeapon(GetLocalCharacter()) end
 
 local function GetLocalClass()
     if not EnsureGUILoaded() then return "Unknown" end
@@ -470,13 +502,38 @@ end
 
 local function GetPing()
     local p = 0; pcall(function() p = Stats.Network.ServerStatsItem["Data Ping"]:GetValue() end)
-    local r = p / 1000; return math.max(r, 0.05)
+    return math.max(p / 1000, 0.05)
 end
 
+-- Use workspace MasterControlState / isAirborne for accurate ground state
 local function IsOnGround(char)
     if not char then return false end
-    local hum = char:FindFirstChildOfClass("Humanoid"); if not hum then return false end
-    return hum.FloorMaterial ~= Enum.Material.Air
+    local wsChar = Workspace:FindFirstChild(char.Name)
+    if wsChar then
+        local mcs = wsChar:GetAttribute("MasterControlState")
+        if mcs then return mcs == "Grounded" end
+        local airborne = wsChar:GetAttribute("isAirborne")
+        if airborne ~= nil then return not airborne end
+    end
+    local hum = GetHumanoid(char)
+    return hum and hum.FloorMaterial ~= Enum.Material.Air
+end
+
+-- Ground check for local player
+local function IsLocalGrounded()
+    local wsChar = Workspace:FindFirstChild(LocalPlayer.Name)
+    if wsChar then
+        local mcs = wsChar:GetAttribute("MasterControlState")
+        if mcs then return mcs == "Grounded" end
+        local airborne = wsChar:GetAttribute("isAirborne")
+        if airborne ~= nil then return not airborne end
+    end
+    local char = GetLocalCharacter()
+    if char then
+        local hum = GetHumanoid(char)
+        return hum and hum.FloorMaterial ~= Enum.Material.Air
+    end
+    return true
 end
 
 local function IsRocketJumped()
@@ -484,13 +541,14 @@ local function IsRocketJumped()
     return lc:FindFirstChild("RocketJumped") ~= nil
 end
 
+-- Fixed: reads from workspace.CharName.Conditions, uses player.Character
 local function GetPlayerModifiers(player)
     local mods = {}
     pcall(function()
-        local char = Workspace:FindFirstChild(player.Name); if not char then return end
-        local mf = char:FindFirstChild("Modifiers"); if not mf then return end
+        local char = player.Character; if not char then return end
+        local conds = char:FindFirstChild("Conditions"); if not conds then return end
         for attrName in pairs(StatusLetters) do
-            if mf:GetAttribute(attrName) == true then mods[attrName] = true end
+            if conds:GetAttribute(attrName) == true then mods[attrName] = true end
         end
     end)
     return mods
@@ -499,7 +557,7 @@ end
 local function IsPlayerFullHP(player)
     local char = player.Character; if not char then return true end
     local hum = GetHumanoid(char); if not hum then return true end
-    return hum.Health >= GetClassMaxHP(player)
+    return hum.Health >= GetPlayerMaxHP(player)
 end
 
 local function IsSyringeWeapon(weapon)
@@ -507,7 +565,7 @@ local function IsSyringeWeapon(weapon)
 end
 
 ------------------------------------------------------------
--- SIM RAY PARAMS (cached for SIM_PARAMS_CACHE_TTL seconds)
+-- SIM RAY PARAMS (cached TTL, using cachedPlayerList)
 ------------------------------------------------------------
 local function GetSimRayParams()
     local now = tick()
@@ -518,9 +576,7 @@ local function GetSimRayParams()
     rp.FilterType = Enum.RaycastFilterType.Blacklist
     rp.IgnoreWater = true
     local ignore = {}
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p.Character then table.insert(ignore, p.Character) end
-    end
+    for _, p in ipairs(cachedPlayerList) do if p.Character then table.insert(ignore, p.Character) end end
     table.insert(ignore, Camera)
     rp.FilterDescendantsInstances = ignore
     S.simRayParamsCache = rp
@@ -529,12 +585,12 @@ local function GetSimRayParams()
 end
 
 ------------------------------------------------------------
--- VELOCITY TRACKING
+-- VELOCITY TRACKING (uses cachedPlayerList)
 ------------------------------------------------------------
 local function UpdateVelocityTracking()
     local now = tick()
     if now - S.lastVelocityUpdate < 0.03 then return end
-    for _, player in ipairs(Players:GetPlayers()) do
+    for _, player in ipairs(cachedPlayerList) do
         if player == LocalPlayer then continue end
         local char = player.Character; if not char then continue end
         local hrp = GetHRP(char); if not hrp then continue end
@@ -592,13 +648,11 @@ local function IsVelocityStale(player)
     local recent = hist[#hist]; local older = hist[math.max(1, #hist-5)]
     local dt = recent.Time - older.Time
     if dt < 0.25 then return false end
-    local moved = (recent.Pos - older.Pos).Magnitude
-    return GetPlayerVelocity(player).Magnitude > 10 and moved < 2
+    return GetPlayerVelocity(player).Magnitude > 10 and (recent.Pos - older.Pos).Magnitude < 2
 end
 
 ------------------------------------------------------------
--- UNIFIED MOVEMENT SIMULATION
--- wallCheck=true returns lastValidPos if path passes through a wall
+-- MOVEMENT SIMULATION
 ------------------------------------------------------------
 local function SimTraceGround(position, rp)
     local result = Workspace:Raycast(position + Vector3.new(0,3,0), Vector3.new(0,-200,0), rp)
@@ -659,7 +713,7 @@ local function SimulateTargetPosition(player, totalTime, steps, rp, wallCheck)
     else hVel = hRaw end
     if hVel.Magnitude > 80 then hVel = hVel.Unit * 80 end
 
-    local vY          = rawVel.Y
+    local vY = rawVel.Y
     local acceleration = GetPlayerAcceleration(player)
     local grounded    = IsOnGround(char)
     local timeStep    = totalTime / steps
@@ -671,19 +725,18 @@ local function SimulateTargetPosition(player, totalTime, steps, rp, wallCheck)
     local isJumping   = grounded and vY > TC2_JUMP_POWER * 0.5
     local lastValidPos = currentPos
 
-    -- For wallCheck mode: separate RaycastParams that also ignores players
     local wallRP
     if wallCheck then
         wallRP = RaycastParams.new()
         wallRP.FilterType = Enum.RaycastFilterType.Blacklist
         wallRP.IgnoreWater = true
         local wi = {}
-        for _, p in ipairs(Players:GetPlayers()) do if p.Character then table.insert(wi, p.Character) end end
+        for _, p in ipairs(cachedPlayerList) do if p.Character then table.insert(wi, p.Character) end end
         table.insert(wi, Camera)
         wallRP.FilterDescendantsInstances = wi
     end
 
-    for i = 1, steps do
+    for _ = 1, steps do
         if simStopped and simGrounded then continue end
         local t = timeStep
         local prevPos = simPos
@@ -783,15 +836,10 @@ do
     end) end)
     task.spawn(function()
         task.wait(3); RefreshObjectCaches()
-        -- Periodic full refresh in case map changes mid-round
-        while true do
-            task.wait(30); if Library.Unloaded then break end
-            pcall(RefreshObjectCaches)
-        end
+        while true do task.wait(30); if Library.Unloaded then break end; pcall(RefreshObjectCaches) end
     end)
     task.spawn(function()
-        local mi = Workspace:WaitForChild("Map", 10)
-        if not mi then return end
+        local mi = Workspace:WaitForChild("Map", 10); if not mi then return end
         local items = mi:FindFirstChild("Items"); if not items then return end
         items.ChildAdded:Connect(function(c) task.defer(function()
             if c.Name:match("Ammo") or c.Name == "DeadAmmo" then table.insert(cachedAmmo, c)
@@ -808,7 +856,7 @@ local function GetMyStickybombs()
     for _, v in pairs(dest:GetChildren()) do
         if v.Name:match(LocalPlayer.Name) and v.Name:match("stickybomb$") then
             local p = v:IsA("BasePart") and v or v:FindFirstChildWhichIsA("BasePart")
-            if p then table.insert(result, p) end
+            if p then table.insert(result, v) end
         end
     end
     return result
@@ -883,7 +931,6 @@ local function CalculateAimPoint(origin, targetPos, speed, gravity, weaponName)
         if initAngle > 0 then angle = angle - math.rad(initAngle) end
         return origin + hDir.Unit * hDist + Vector3.new(0, math.tan(angle)*hDist, 0)
     end
-    -- No real solution — compensate for gravity drop
     local flightTime = hDist / speed
     local drop = 0.5 * gravity * flightTime * flightTime
     local aim  = targetPos + Vector3.new(0, drop, 0)
@@ -895,7 +942,7 @@ local function CanProjectileHitPosition(origin, targetPos, speed, gravity, initA
     local wallRP = RaycastParams.new()
     wallRP.FilterType = Enum.RaycastFilterType.Blacklist; wallRP.IgnoreWater = true
     local wi = {}
-    for _, p in ipairs(Players:GetPlayers()) do if p.Character then table.insert(wi, p.Character) end end
+    for _, p in ipairs(cachedPlayerList) do if p.Character then table.insert(wi, p.Character) end end
     table.insert(wi, Camera); wallRP.FilterDescendantsInstances = wi
 
     if gravity == 0 then
@@ -932,36 +979,31 @@ local function PredictProjectileHit(targetPart, player, weaponName)
     local char   = targetPart:FindFirstAncestorOfClass("Model")
     local hrp    = char and GetHRP(char); if not hrp then return targetPart.Position, 0 end
 
-    -- partOffset: the selected body part's position relative to HRP (e.g. Head is ~+1.5 Y).
-    -- Simulation always tracks HRP; we re-apply this offset at the end so the aim point
-    -- matches the selected part instead of always landing on the torso/HRP.
+    -- Capture selected part's offset from HRP; simulation tracks HRP, we re-apply offset at end
     local partOffset = targetPart.Position - hrp.Position
 
     if IsVelocityStale(player) or GetPlayerVelocity(player).Magnitude < 0.5 then
-        local d = (targetPart.Position - origin).Magnitude
-        return targetPart.Position, d / speed
+        return targetPart.Position, (targetPart.Position - origin).Magnitude / speed
     end
 
     local rp = GetSimRayParams()
     local predictedHRP = hrp.Position
     local travelTime   = 0
-
-    local angleRad  = math.rad(initAngle)
-    local cosAngle  = math.cos(angleRad)
+    local cosAngle     = math.cos(math.rad(initAngle))
 
     for _ = 1, 5 do
         local predictedPart  = predictedHRP + partOffset
         local dx = predictedPart.X - origin.X; local dz = predictedPart.Z - origin.Z
-        local horizontalDist = math.sqrt(dx*dx + dz*dz)
+        local hDist = math.sqrt(dx*dx + dz*dz)
         if gravity == 0 and initAngle == 0 then
             travelTime = (predictedPart - origin).Magnitude / speed
         else
-            travelTime = horizontalDist / math.max(speed * cosAngle, 1)
+            travelTime = hDist / math.max(speed * cosAngle, 1)
         end
         travelTime = math.min(travelTime, lifetime)
         if armTime and armTime > 0 then travelTime = math.max(travelTime, armTime) end
 
-        local totalTime = travelTime + ping * 1.12
+        local totalTime = travelTime + ping * 1   -- 1 round-trip
         local simSteps  = math.clamp(math.floor(totalTime / 0.033), 5, 30)
         local simResult = SimulateTargetPosition(player, totalTime, simSteps, rp, true)
         if simResult then predictedHRP = simResult else return targetPart.Position, travelTime end
@@ -984,13 +1026,12 @@ local function PredictProjectileHit(targetPart, player, weaponName)
 end
 
 ------------------------------------------------------------
--- BUILD PLAYER DATA
--- Caches ScreenPos and Depth per player to avoid double WorldToViewportPoint
+-- BUILD PLAYER DATA (single WorldToViewportPoint per player)
 ------------------------------------------------------------
 local function BuildPlayerData()
-    local data    = {}
-    local lc      = GetLocalCharacter(); local lhrp = lc and GetHRP(lc); if not lhrp then return data end
-    for _, plr in ipairs(Players:GetPlayers()) do
+    local data  = {}
+    local lc    = GetLocalCharacter(); local lhrp = lc and GetHRP(lc); if not lhrp then return data end
+    for _, plr in ipairs(cachedPlayerList) do
         if plr == LocalPlayer or not IsPlayerAlive(plr) then continue end
         local char = plr.Character; if not char then continue end
         local hrp  = GetHRP(char); if not hrp then continue end
@@ -1007,6 +1048,7 @@ local function BuildPlayerData()
             IsEnemy   = IsEnemy(plr),
             IsFriend  = IsFriend(plr),
             Class     = GetPlayerClass(plr),
+            IsCheater = IsCheater(plr),
         })
     end
     return data
@@ -1016,13 +1058,13 @@ end
 -- SILENT AIM TARGET SELECTION
 ------------------------------------------------------------
 local function GetSilentAimTarget(playerData)
-    local fov       = Options.SilentAimFOV.Value
+    local fov        = Options.SilentAimFOV.Value
     local aimTargets = Options.AimAtTargets.Value or {}
-    local weapon    = GetLocalWeapon()
-    local isSyringe = IsSyringeWeapon(weapon)
-    local sortMode  = Options.SilentAimSort.Value or "Closest to Mouse"
-    local selGroups = Options.SilentAimBodyParts.Value or {Head=true}
-    local sc        = FrameCache.screenCenter
+    local weapon     = GetLocalWeapon()
+    local isSyringe  = IsSyringeWeapon(weapon)
+    local sortMode   = Options.SilentAimSort.Value or "Closest to Mouse"
+    local selGroups  = Options.SilentAimBodyParts.Value or {Head=true}
+    local sc         = FrameCache.screenCenter
 
     local bestPart, bestDist, bestPlayer = nil, math.huge, nil
 
@@ -1051,7 +1093,7 @@ local function GetSilentAimTarget(playerData)
         for _, v in pairs(cachedSentries) do
             if not v.Parent then continue end
             local ownerName = v.Name:match("^(.+)'s Sentry$"); local isEnemySentry = true
-            if ownerName then for _, plr in ipairs(Players:GetPlayers()) do
+            if ownerName then for _, plr in ipairs(cachedPlayerList) do
                 if plr.Name == ownerName and plr.Team == LocalPlayer.Team then isEnemySentry = false; break end
             end end
             if not isEnemySentry then continue end
@@ -1070,7 +1112,7 @@ local function GetSilentAimTarget(playerData)
         if dest then for _, v in pairs(dest:GetChildren()) do
             if v.Name:match("stickybomb$") and not v.Name:match(LocalPlayer.Name) then
                 local isEn = true
-                for _, plr in ipairs(Players:GetPlayers()) do
+                for _, plr in ipairs(cachedPlayerList) do
                     if v.Name:match(plr.Name) and plr.Team == LocalPlayer.Team then isEn = false; break end
                 end
                 if not isEn then continue end
@@ -1092,8 +1134,7 @@ local function GetSilentAimTarget(playerData)
 end
 
 ------------------------------------------------------------
--- AIM ARMS
--- Snaps/smooths to target for 0.5s, then returns to camera over 0.3s
+-- AIM ARMS (0.5s hold, 0.3s smooth return)
 ------------------------------------------------------------
 local ARM_HOLD_TIME   = 0.5
 local ARM_RETURN_TIME = 0.3
@@ -1112,95 +1153,52 @@ local function ResetArmsToCamera()
     local am = vm:FindFirstChild("CharacterArmsModel"); if not am then return end
     local vp = vm:GetPivot()
     local ao = vp:ToObjectSpace(am:GetPivot())
-    local lr = Camera.CFrame * CFrame.Angles(math.rad(180), math.rad(180), math.rad(180))
-    am:PivotTo(lr * ao)
+    am:PivotTo(Camera.CFrame * CFrame.Angles(math.rad(180), math.rad(180), math.rad(180)) * ao)
 end
 
 local function UpdateAimArms()
     if not (Toggles.SilentAimArms and Toggles.SilentAimArms.Value) then return end
     if not S.armTarget then return end
-
     local now = tick()
 
     if S.armReturning then
-        local elapsed = now - S.armReturnStart
-        local alpha   = math.clamp(elapsed / ARM_RETURN_TIME, 0, 1)
+        local alpha = math.clamp((now - S.armReturnStart) / ARM_RETURN_TIME, 0, 1)
         if alpha >= 1 then
-            -- Done returning
-            S.armReturning = false; S.armTarget = nil; S.armOriginalCF = nil
-            ResetArmsToCamera()
+            S.armReturning = false; S.armTarget = nil; ResetArmsToCamera()
         else
-            -- Lerp arms back toward camera direction
             local vm = Camera:FindFirstChild("PrimaryVM"); if not vm then return end
-            local am = vm:FindFirstChild("CharacterArmsModel"); if not am then return end
             local vp = vm:GetPivot()
-            local targetDir   = (S.armTarget - vp.Position).Unit
-            local cameraDir   = Camera.CFrame.LookVector
-            local lerpedDir   = targetDir:Lerp(cameraDir, alpha)
-            local lerpedPos   = vp.Position + lerpedDir * 10
-            AimArmsAt(lerpedPos)
+            local tDir = (S.armTarget - vp.Position).Unit
+            local cDir = Camera.CFrame.LookVector
+            AimArmsAt(vp.Position + tDir:Lerp(cDir, alpha) * 10)
         end
         return
     end
 
-    -- Holding phase
     local elapsed = now - S.armHoldStart
-    if elapsed >= ARM_HOLD_TIME then
-        -- Switch to returning
-        S.armReturning    = true
-        S.armReturnStart  = now
-        return
-    end
+    if elapsed >= ARM_HOLD_TIME then S.armReturning = true; S.armReturnStart = now; return end
 
     local mode = Options.SilentAimArmsMode and Options.SilentAimArmsMode.Value or "Snap"
     if mode == "Snap" then
         AimArmsAt(S.armTarget)
     else
-        -- Smooth ease-in over 0.15s
         local alpha = math.clamp(elapsed / 0.15, 0, 1)
         local vm = Camera:FindFirstChild("PrimaryVM"); if not vm then return end
         local vp = vm:GetPivot()
-        local cameraDir = Camera.CFrame.LookVector
-        local targetDir = (S.armTarget - vp.Position).Unit
-        local lerpedDir = cameraDir:Lerp(targetDir, alpha)
-        AimArmsAt(vp.Position + lerpedDir * 10)
+        local cDir = Camera.CFrame.LookVector
+        local tDir = (S.armTarget - vp.Position).Unit
+        AimArmsAt(vp.Position + cDir:Lerp(tDir, alpha) * 10)
     end
 end
 
 local function TriggerAimArms(targetPos)
-    -- Start a new aim if not already in hold/return phase, or if target changed significantly
     if not S.armReturning then
-        S.armTarget    = targetPos
-        S.armHoldStart = tick()
+        S.armTarget = targetPos; S.armHoldStart = tick()
     end
 end
 
 ------------------------------------------------------------
--- REMOTE DETECTION
-------------------------------------------------------------
-local function FindBannerFolder()
-    S.bannerFolder = ReplicatedStorage:FindFirstChild("Folder ")
-    if not S.bannerFolder then
-        for _, child in ipairs(ReplicatedStorage:GetChildren()) do
-            if child.Name:match("^Folder") then S.bannerFolder = child; break end
-        end
-    end
-end
-
-local function SetupRemoteFinder()
-    FindBannerFolder()
-    if not S.bannerFolder then Notify("Could not find remote folder", 4); return end
-    remoteSet = {}
-    for _, child in ipairs(S.bannerFolder:GetChildren()) do
-        if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") then remoteSet[child] = true end
-    end
-    Notify("this notification had a meaning but is now useless :)", 5)
-end
-
-task.spawn(function() task.wait(2); SetupRemoteFinder() end)
-
-------------------------------------------------------------
--- GET PROJECTILE AIM CFRAME
+-- CAMERA HOOK
 ------------------------------------------------------------
 local function GetProjectileAimCFrame(target, targetPlr, weapon)
     if weapon == "Huntsman" then
@@ -1218,9 +1216,6 @@ local function GetProjectileAimCFrame(target, targetPlr, weapon)
     end
 end
 
-------------------------------------------------------------
--- SILENT AIM CAMERA HOOK
-------------------------------------------------------------
 task.spawn(function()
     pcall(function()
         local camModule = require(ReplicatedStorage.Modules.gameCamera)
@@ -1232,7 +1227,6 @@ task.spawn(function()
             if BlacklistedWeapons[weapon] then return orig(self2, ...) end
             local isProj = ProjectileWeapons[weapon] ~= nil or ChargeWeapons[weapon] ~= nil
 
-            -- Silent Aim
             if Config.SilentAim.Enabled and S.silentAimKeyActive then
                 local target    = FrameCache.silentTarget
                 local targetPlr = FrameCache.silentTargetPlr
@@ -1250,7 +1244,6 @@ task.spawn(function()
                 end
             end
 
-            -- Auto Backstab
             if Toggles.AutoBackstab and Toggles.AutoBackstab.Value then
                 local myClass = GetLocalClass(); local myWeapon = GetLocalWeapon()
                 if myClass == "Agent" and BackstabWeapons[myWeapon] then
@@ -1260,6 +1253,7 @@ task.spawn(function()
                         if Toggles.BackstabIgnoreInvis.Value and IsCharacterInvisible(pd.Character) then continue end
                         local toT = (pd.HRP.Position - lh.Position).Unit
                         if toT:Dot(pd.HRP.CFrame.LookVector) > 0.3 then
+                            if not HasLineOfSight(lh.Position, pd.HRP.Position) then continue end
                             local backPos = pd.HRP.Position - pd.HRP.CFrame.LookVector
                             if Toggles.SilentAimArms.Value then TriggerAimArms(backPos) end
                             return CFrame.lookAt(FrameCache.camPos, backPos)
@@ -1268,19 +1262,18 @@ task.spawn(function()
                 end
             end
 
-            -- Auto Melee
             if Toggles.AutoMelee and Toggles.AutoMelee.Value then
                 local myWeapon = GetLocalWeapon()
                 if MeleeWeapons[myWeapon] then
                     local lh = GetHRP(GetLocalCharacter())
-                    local meleeMode = Options.AutoMeleeMode and Options.AutoMeleeMode.Value or "Rage"
-                    local meleeRange = meleeMode == "Demoknight" and MELEE_RANGE_DEMOKNIGHT or MELEE_RANGE_RAGE
+                    local meleeRange = (Options.AutoMeleeMode and Options.AutoMeleeMode.Value == "Demoknight") and MELEE_RANGE_DEMOKNIGHT or MELEE_RANGE_RAGE
                     if lh then
-                        local bestTarget, bestDist = nil, math.huge
+                        local bestTarget, bestDist2 = nil, math.huge
                         for _, pd in ipairs(FrameCache.playerData or {}) do
                             if not pd.IsEnemy or pd.Distance > meleeRange then continue end
                             if Toggles.MeleeIgnoreInvis.Value and IsCharacterInvisible(pd.Character) then continue end
-                            if pd.Distance < bestDist then bestDist = pd.Distance; bestTarget = pd end
+                            if not HasLineOfSight(lh.Position, pd.HRP.Position) then continue end
+                            if pd.Distance < bestDist2 then bestDist2 = pd.Distance; bestTarget = pd end
                         end
                         if bestTarget then return CFrame.lookAt(FrameCache.camPos, bestTarget.HRP.Position) end
                     end
@@ -1294,7 +1287,7 @@ end)
 
 -- (namecall hook removed — no longer needed)
 
--- Wallbang: only hook __index when enabled, install/remove dynamically
+-- Wallbang hook — installed/removed dynamically
 local wallbangHook = nil
 local function InstallWallbangHook()
     if wallbangHook then return end
@@ -1305,7 +1298,6 @@ local function InstallWallbangHook()
 end
 local function RemoveWallbangHook()
     if not wallbangHook then return end
-    -- Restore by re-hooking with passthrough
     hookmetamethod(game, "__index", function(self2, key) return wallbangHook(self2, key) end)
     wallbangHook = nil
 end
@@ -1338,7 +1330,7 @@ local function SetupSpeed()
 end
 
 ------------------------------------------------------------
--- THIRD PERSON / DEVICE SPOOF / OTHER MISC
+-- MISC
 ------------------------------------------------------------
 local function ApplyThirdPerson(state)
     pcall(function()
@@ -1401,11 +1393,7 @@ end
 ------------------------------------------------------------
 LocalPlayer.CharacterAdded:Connect(function()
     task.wait(1); EnsureGUILoaded(); SetupNoSpread(); SetupSpeed()
-    S.jitterDir = 1; S.spinAngle = 0; S.armTarget = nil; S.armReturning = false
-    if S.shootingRemote and not S.shootingRemote.Parent then
-        S.shootingRemoteFound = false; S.shootingRemote = nil; lastKnownAmmo = {}; remoteSet = {}
-        task.wait(1); SetupRemoteFinder()
-    end
+    S.jitterDir = 1; S.spinAngle = 0; S.armTarget = nil; S.armReturning = false;
 end)
 task.spawn(function() task.wait(2); EnsureGUILoaded(); SetupNoSpread()
     if LocalPlayer.Character then SetupSpeed() end
@@ -1433,8 +1421,8 @@ local function CreatePlayerESP(player)
     if ESPObjects[player] then return end
     local d = {BoxLines={}, BoxOutlines={}, CornerLines={}, CornerOutlines={},
                Box3DLines={}, Box3DOutlines={}, SkeletonLines={}, StatusTexts={}, Hidden=true}
-    for i=1,4  do d.BoxOutlines[i]  = MkDraw("Line",{Thickness=3,Color=Color3.new(0,0,0),Visible=false}) end
-    for i=1,8  do d.CornerOutlines[i] = MkDraw("Line",{Thickness=3,Color=Color3.new(0,0,0),Visible=false}) end
+    for i=1,4  do d.BoxOutlines[i]   = MkDraw("Line",{Thickness=3,Color=Color3.new(0,0,0),Visible=false}) end
+    for i=1,8  do d.CornerOutlines[i]= MkDraw("Line",{Thickness=3,Color=Color3.new(0,0,0),Visible=false}) end
     for i=1,12 do d.Box3DOutlines[i] = MkDraw("Line",{Thickness=3,Color=Color3.new(0,0,0),Visible=false}) end
     d.HealthBarBG      = MkDraw("Line",{Thickness=3,Color=Color3.fromRGB(20,20,20),Visible=false})
     d.HealthBarOutline = MkDraw("Square",{Filled=false,Thickness=1,Color=Color3.new(0,0,0),Visible=false})
@@ -1442,16 +1430,17 @@ local function CreatePlayerESP(player)
     for i=1,4  do d.BoxLines[i]    = MkDraw("Line",{Thickness=1,Visible=false}) end
     for i=1,8  do d.CornerLines[i] = MkDraw("Line",{Thickness=1,Visible=false}) end
     for i=1,12 do d.Box3DLines[i]  = MkDraw("Line",{Thickness=1,Visible=false}) end
-    d.HealthBar   = MkDraw("Line",{Thickness=1,Visible=false})
-    d.HealthDmg   = MkDraw("Line",{Thickness=1,Color=Color3.fromRGB(255,120,0),Visible=false})
-    d.Tracer      = MkDraw("Line",{Thickness=1,Visible=false})
-    d.NameText    = MkDraw("Text",{Size=13,Center=true,Outline=true,Font=2,Visible=false})
-    d.DistanceText= MkDraw("Text",{Size=13,Center=true,Outline=true,Font=2,Visible=false})
-    d.WeaponText  = MkDraw("Text",{Size=13,Center=true,Outline=true,Font=2,Visible=false})
-    d.ClassText   = MkDraw("Text",{Size=13,Center=true,Outline=true,Font=2,Visible=false})
-    d.HealthText  = MkDraw("Text",{Size=11,Center=false,Outline=true,Font=2,Visible=false})
+    d.HealthBar         = MkDraw("Line",{Thickness=1,Visible=false})
+    d.HealthDmg         = MkDraw("Line",{Thickness=1,Color=Color3.fromRGB(255,120,0),Visible=false})
+    d.Tracer            = MkDraw("Line",{Thickness=1,Visible=false})
+    d.NameText          = MkDraw("Text",{Size=13,Center=true,Outline=true,Font=2,Visible=false})
+    d.CheaterText       = MkDraw("Text",{Size=11,Center=true,Outline=true,Font=2,Visible=false,Color=Color3.fromRGB(255,60,60)})
+    d.DistanceText      = MkDraw("Text",{Size=13,Center=true,Outline=true,Font=2,Visible=false})
+    d.WeaponText        = MkDraw("Text",{Size=13,Center=true,Outline=true,Font=2,Visible=false})
+    d.ClassText         = MkDraw("Text",{Size=13,Center=true,Outline=true,Font=2,Visible=false})
+    d.HealthText        = MkDraw("Text",{Size=11,Center=false,Outline=true,Font=2,Visible=false})
     d.HealthPercentText = MkDraw("Text",{Size=11,Center=false,Outline=true,Font=2,Visible=false})
-    d.SightLine   = MkDraw("Line",{Thickness=1,Color=Color3.new(1,0,0),Visible=false})
+    d.SightLine         = MkDraw("Line",{Thickness=1,Color=Color3.new(1,0,0),Visible=false})
     for i=1,#SkeletonConnections do d.SkeletonLines[i] = MkDraw("Line",{Thickness=1,Visible=false}) end
     for attrName, info in pairs(StatusLetters) do
         d.StatusTexts[attrName] = MkDraw("Text",{Size=11,Center=false,Outline=true,Font=2,Visible=false,Color=info.Color})
@@ -1467,7 +1456,7 @@ local function DestroyPlayerESP(player)
     for i=1,12 do R(d.Box3DLines[i]);  R(d.Box3DOutlines[i]) end
     for i=1,#SkeletonConnections do R(d.SkeletonLines[i]) end
     R(d.HealthBarBG); R(d.HealthBar); R(d.HealthDmg); R(d.HealthBarOutline)
-    R(d.NameText); R(d.DistanceText); R(d.WeaponText); R(d.ClassText)
+    R(d.NameText); R(d.CheaterText); R(d.DistanceText); R(d.WeaponText); R(d.ClassText)
     R(d.HealthText); R(d.HealthPercentText); R(d.SightLine); R(d.Tracer); R(d.TracerOut)
     for _, txt in pairs(d.StatusTexts) do R(txt) end
     ESPObjects[player] = nil
@@ -1480,7 +1469,8 @@ local function HidePlayerESP(player)
     for i=1,12 do d.Box3DLines[i].Visible=false;   d.Box3DOutlines[i].Visible=false end
     for i=1,#SkeletonConnections do d.SkeletonLines[i].Visible=false end
     d.HealthBarBG.Visible=false; d.HealthBar.Visible=false; d.HealthDmg.Visible=false; d.HealthBarOutline.Visible=false
-    d.NameText.Visible=false; d.DistanceText.Visible=false; d.WeaponText.Visible=false; d.ClassText.Visible=false
+    d.NameText.Visible=false; d.CheaterText.Visible=false; d.DistanceText.Visible=false
+    d.WeaponText.Visible=false; d.ClassText.Visible=false
     d.HealthText.Visible=false; d.HealthPercentText.Visible=false; d.SightLine.Visible=false
     d.Tracer.Visible=false; d.TracerOut.Visible=false
     for _, txt in pairs(d.StatusTexts) do txt.Visible=false end
@@ -1490,7 +1480,7 @@ local function CreateObjectESP(inst)
     if ObjectESPCache[inst] then return end
     local d = {BoxLines={}, BoxOutlines={}}
     for i=1,4 do d.BoxOutlines[i] = MkDraw("Line",{Thickness=3,Color=Color3.new(0,0,0),Visible=false}) end
-    d.HealthBarBG = MkDraw("Line",{Thickness=3,Color=Color3.new(0,0,0),Visible=false})
+    d.HealthBarBG       = MkDraw("Line",{Thickness=3,Color=Color3.new(0,0,0),Visible=false})
     for i=1,4 do d.BoxLines[i] = MkDraw("Line",{Thickness=1,Visible=false}) end
     d.HealthBar         = MkDraw("Line",{Thickness=1,Visible=false})
     d.HealthText        = MkDraw("Text",{Size=13,Center=true,Outline=true,Font=2,Visible=false})
@@ -1519,9 +1509,7 @@ end
 -- ESP RENDERING
 ------------------------------------------------------------
 local function Get2DBox(pd)
-    -- Reuse depth from BuildPlayerData instead of calling WorldToViewportPoint again
-    local sp    = pd.ScreenPos
-    local depth = pd.Depth
+    local sp = pd.ScreenPos; local depth = pd.Depth
     if not pd.OnScreen or depth < 1 then return nil end
     local sc2 = (2 * Camera.ViewportSize.Y) / ((2 * depth * math.tan(math.rad(Camera.FieldOfView)/2)) * 1.5)
     local w, h = math.floor(3*sc2), math.floor(4*sc2)
@@ -1572,23 +1560,33 @@ local function UpdatePlayerESP(pd)
     local d = ESPObjects[player]; if not d then CreatePlayerESP(player); d = ESPObjects[player]; if not d then return end end
     local char = pd.Character; local hum = GetHumanoid(char)
     if not hum or hum.Health <= 0 then HidePlayerESP(player); return end
-    if pd.IsEnemy  and not Toggles.ESPEnemy.Value   then HidePlayerESP(player); return end
-    if not pd.IsEnemy and not pd.IsFriend and not Toggles.ESPTeam.Value  then HidePlayerESP(player); return end
-    if pd.IsFriend and not Toggles.ESPFriends.Value then HidePlayerESP(player); return end
-    if Toggles.ESPIgnoreInvis.Value and IsCharacterInvisible(pd.Character) then HidePlayerESP(player); return end
+    if pd.IsEnemy      and not Toggles.ESPEnemy.Value   then HidePlayerESP(player); return end
+    if not pd.IsEnemy  and not pd.IsFriend and not Toggles.ESPTeam.Value then HidePlayerESP(player); return end
+    if pd.IsFriend     and not Toggles.ESPFriends.Value then HidePlayerESP(player); return end
+    if Toggles.ESPIgnoreInvis.Value and IsCharacterInvisible(char) then HidePlayerESP(player); return end
     if pd.Distance > 500 or not pd.OnScreen then HidePlayerESP(player); return end
 
     local box = Get2DBox(pd); if not box then HidePlayerESP(player); return end
-
     HidePlayerESP(player); d.Hidden = false
+
     local color = Options.ESPBoxColor.Value
     local bt = Options.ESPBoxType.Value
-    if bt == "2D" then Draw2DBox(d, box, color)
+    if     bt == "2D"      then Draw2DBox(d, box, color)
     elseif bt == "Corners" then DrawCorners(d, box, color)
-    elseif bt == "3D" then Draw3DBox(d, char, color) end
+    elseif bt == "3D"      then Draw3DBox(d, char, color) end
 
-    local hp, mhp = hum.Health, hum.MaxHealth; local hf = math.clamp(hp/mhp, 0, 1)
+    local maxHP = GetPlayerMaxHP(player)
+    local hp = hum.Health; local hf = math.clamp(hp/maxHP, 0, 1)
     local topY = box.TopY - 2; local tX = box.CX
+
+    -- Cheater tag
+    if pd.IsCheater then
+        topY = topY - 13
+        d.CheaterText.Text = "cheater"; d.CheaterText.Position = Vector2.new(tX, topY)
+        d.CheaterText.Color = Color3.fromRGB(255,60,60); d.CheaterText.Visible = true
+        topY = topY - 2
+    else d.CheaterText.Visible = false end
+
     if Toggles.ESPClass and Toggles.ESPClass.Value then
         topY = topY - 15; d.ClassText.Text = pd.Class; d.ClassText.Position = Vector2.new(tX,topY); d.ClassText.Color = Color3.fromRGB(200,200,255); d.ClassText.Visible = true
     end
@@ -1603,31 +1601,31 @@ local function UpdatePlayerESP(pd)
         local mods = GetPlayerModifiers(player); local rightX = box.X+box.W+4; local rightY = box.Y
         for attrName, info in pairs(StatusLetters) do
             local txt = d.StatusTexts[attrName]
-            if mods[attrName] then txt.Text=info.Letter; txt.Position=Vector2.new(rightX,rightY); txt.Color=info.Color; txt.Visible=true; rightY=rightY+12
+            if mods[attrName] then txt.Text=info.Letter; txt.Position=Vector2.new(rightX,rightY); txt.Color=(attrName=="Ubercharged") and GetRainbowColor() or info.Color; txt.Visible=true; rightY=rightY+12
             else txt.Visible=false end
         end
     else for _, txt in pairs(d.StatusTexts) do txt.Visible=false end end
 
     if Toggles.ESPHealthBar and Toggles.ESPHealthBar.Value then
-        local classMax = GetClassMaxHP(player); local hpFrac = math.clamp(hp/classMax, 0, 1.5)
+        local hpFrac = math.clamp(hp/maxHP, 0, 1.5)
         local barW=3; local barX=box.X-barW-3; local barTop=box.Y; local barBot=box.Y+box.H; local barH=barBot-barTop
         local hpHeight=barH*math.min(hpFrac,1); local fillY=barBot-hpHeight
         d.HealthBarOutline.Size=Vector2.new(barW+2,barH+2); d.HealthBarOutline.Position=Vector2.new(barX-1,barTop-1); d.HealthBarOutline.Visible=true
         d.HealthBarBG.From=Vector2.new(barX+1,barTop); d.HealthBarBG.To=Vector2.new(barX+1,barBot); d.HealthBarBG.Thickness=barW; d.HealthBarBG.Visible=true
         d.HealthBar.From=Vector2.new(barX+1,fillY); d.HealthBar.To=Vector2.new(barX+1,barBot); d.HealthBar.Thickness=barW-2
-        d.HealthBar.Color = hpFrac>1 and Color3.fromRGB(0,200,255) or Color3.fromRGB(255*(1-hpFrac), 255*hpFrac, 0)
+        d.HealthBar.Color = hpFrac>1 and Color3.fromRGB(0,200,255) or Color3.fromRGB(255*(1-hf),255*hf,0)
         d.HealthBar.Visible=true; d.HealthDmg.Visible=false
         if Toggles.ESPHealthValue and Toggles.ESPHealthValue.Value then
-            local txt = tostring(math.floor(hp)); if hpFrac>1 then txt=txt.." (+"..math.floor(hp-classMax)..")" end
+            local txt = tostring(math.floor(hp)); if hpFrac>1 then txt=txt.." (+"..math.floor(hp-maxHP)..")" end
             d.HealthText.Text=txt; d.HealthText.Position=Vector2.new(barX-2,fillY-6); d.HealthText.Color=d.HealthBar.Color; d.HealthText.Visible=true
         else d.HealthText.Visible=false end
         if Toggles.ESPHealthPercent and Toggles.ESPHealthPercent.Value then
-            d.HealthPercentText.Text=string.format("%d%%",math.floor(hpFrac*100)); d.HealthPercentText.Position=Vector2.new(barX-2,barBot-12); d.HealthPercentText.Color=Color3.new(1,1,1); d.HealthPercentText.Visible=true
+            d.HealthPercentText.Text=string.format("%d%%",math.floor(hf*100)); d.HealthPercentText.Position=Vector2.new(barX-2,barBot-12); d.HealthPercentText.Color=Color3.new(1,1,1); d.HealthPercentText.Visible=true
         else d.HealthPercentText.Visible=false end
     else
         d.HealthBarBG.Visible=false; d.HealthBar.Visible=false; d.HealthDmg.Visible=false; d.HealthBarOutline.Visible=false
         if Toggles.ESPHealthValue and Toggles.ESPHealthValue.Value then
-            d.HealthText.Text=string.format("HP: %d/%d",math.floor(hp),math.floor(mhp)); d.HealthText.Position=Vector2.new(tX,bY); d.HealthText.Color=Color3.new(1,1,1); d.HealthText.Visible=true; d.HealthText.Center=true; bY=bY+15
+            d.HealthText.Text=string.format("HP: %d/%d",math.floor(hp),math.floor(maxHP)); d.HealthText.Position=Vector2.new(tX,bY); d.HealthText.Color=Color3.new(1,1,1); d.HealthText.Visible=true; d.HealthText.Center=true; bY=bY+15
         else d.HealthText.Visible=false end
         if Toggles.ESPHealthPercent and Toggles.ESPHealthPercent.Value then
             d.HealthPercentText.Text=string.format("%d%%",math.floor(hf*100)); d.HealthPercentText.Position=Vector2.new(tX,bY); d.HealthPercentText.Color=Color3.new(1,1,1); d.HealthPercentText.Visible=true; d.HealthPercentText.Center=true
@@ -1655,10 +1653,10 @@ local function UpdatePlayerESP(pd)
     end
 
     if Toggles.ESPTracer and Toggles.ESPTracer.Value then
-        local tracerColor  = Options.ESPTracerColor and Options.ESPTracerColor.Value or color
-        local originMode   = Options.ESPTracerOrigin and Options.ESPTracerOrigin.Value or "Bottom"
+        local tracerColor = Options.ESPTracerColor and Options.ESPTracerColor.Value or color
+        local originMode  = Options.ESPTracerOrigin and Options.ESPTracerOrigin.Value or "Bottom"
         local tracerOrigin
-        if originMode == "Top" then tracerOrigin = Vector2.new(Camera.ViewportSize.X/2, 0)
+        if     originMode == "Top"    then tracerOrigin = Vector2.new(Camera.ViewportSize.X/2, 0)
         elseif originMode == "Center" then tracerOrigin = FrameCache.screenCenter
         else tracerOrigin = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y) end
         d.TracerOut.From=tracerOrigin; d.TracerOut.To=Vector2.new(box.CX,box.BotY); d.TracerOut.Visible=true
@@ -1677,10 +1675,26 @@ local function GetObjectBox(inst)
             BottomLeft=sp+Vector2.new(-bW/2,bH/2), BottomRight=sp+Vector2.new(bW/2,bH/2), Center=sp, Width=bW, Height=bH}
 end
 
-local function UpdateObjectESP(inst, tn)
+
+------------------------------------------------------------
+-- BUILDING TEAM HELPER
+-- Returns "enemy", "team", or "unknown" for a building model
+------------------------------------------------------------
+local function GetBuildingTeam(inst)
+    local ownerName = inst.Name:match("^(.+)'s ") or inst.Name:match("^(.+)'s")
+    if not ownerName then return "unknown" end
+    for _, plr in ipairs(cachedPlayerList) do
+        if plr.Name == ownerName then
+            return plr.Team == LocalPlayer.Team and "team" or "enemy"
+        end
+    end
+    return "unknown"
+end
+
+local function UpdateObjectESP(inst, tn, overrideColor)
     local d = ObjectESPCache[inst]; if not d then CreateObjectESP(inst); d = ObjectESPCache[inst]; if not d then return end end
     local b = GetObjectBox(inst); if not b then HideObjectESP(inst); return end
-    local c = Options.ObjESPBoxColor.Value
+    local c = overrideColor or Options.ObjESPBoxColor.Value
     local l = {{b.TopLeft,b.TopRight},{b.TopRight,b.BottomRight},{b.BottomRight,b.BottomLeft},{b.BottomLeft,b.TopLeft}}
     for i=1,4 do
         d.BoxOutlines[i].From=l[i][1]; d.BoxOutlines[i].To=l[i][2]; d.BoxOutlines[i].Color=Color3.new(0,0,0); d.BoxOutlines[i].Visible=true
@@ -1691,13 +1705,9 @@ local function UpdateObjectESP(inst, tn)
     if hum then
         local hp, mh = hum.Health, hum.MaxHealth; local hf2 = math.clamp(hp/mh, 0, 1)
         local hc = Color3.fromRGB(255*(1-hf2), 255*hf2, 0); local yO = b.Height/2+2
-        if Toggles.ObjESPHealthValue and Toggles.ObjESPHealthValue.Value then
-            d.HealthText.Text=string.format("HP: %d/%d",math.floor(hp),math.floor(mh)); d.HealthText.Position=b.Center+Vector2.new(0,yO); d.HealthText.Color=Color3.new(1,1,1); d.HealthText.Visible=true; yO=yO+15
-        end
-        if Toggles.ObjESPHealthPercent and Toggles.ObjESPHealthPercent.Value then
-            d.HealthPercentText.Text=string.format("%d%%",math.floor(hf2*100)); d.HealthPercentText.Position=b.Center+Vector2.new(0,yO); d.HealthPercentText.Color=Color3.new(1,1,1); d.HealthPercentText.Visible=true
-        end
-        if Toggles.ObjESPHealthBar and Toggles.ObjESPHealthBar.Value then
+        if Toggles.ObjESPHealthValue  and Toggles.ObjESPHealthValue.Value then  d.HealthText.Text=string.format("HP: %d/%d",math.floor(hp),math.floor(mh)); d.HealthText.Position=b.Center+Vector2.new(0,yO); d.HealthText.Color=Color3.new(1,1,1); d.HealthText.Visible=true; yO=yO+15 end
+        if Toggles.ObjESPHealthPercent and Toggles.ObjESPHealthPercent.Value then d.HealthPercentText.Text=string.format("%d%%",math.floor(hf2*100)); d.HealthPercentText.Position=b.Center+Vector2.new(0,yO); d.HealthPercentText.Color=Color3.new(1,1,1); d.HealthPercentText.Visible=true end
+        if Toggles.ObjESPHealthBar    and Toggles.ObjESPHealthBar.Value then
             local bX=b.TopLeft.X-5; local bT=b.TopLeft.Y; local bB=b.BottomLeft.Y
             d.HealthBarBG.From=Vector2.new(bX,bT); d.HealthBarBG.To=Vector2.new(bX,bB); d.HealthBarBG.Thickness=3; d.HealthBarBG.Visible=true
             d.HealthBar.From=Vector2.new(bX,bB-(bB-bT)*hf2); d.HealthBar.To=Vector2.new(bX,bB); d.HealthBar.Thickness=1; d.HealthBar.Color=hc; d.HealthBar.Visible=true
@@ -1706,42 +1716,54 @@ local function UpdateObjectESP(inst, tn)
 end
 
 ------------------------------------------------------------
--- CHAMS
+-- CHAMS (keyed on player, handles respawns correctly)
 ------------------------------------------------------------
-local ChamsCache = {}; local WorldChamsCache = {}; local ProjectileChamsCache = {}
-
-local function GetOrCreateHighlight(parent, cache, name)
-    if cache[parent] then
-        if not cache[parent].Parent then pcall(function() cache[parent]:Destroy() end); cache[parent] = nil
-        else return cache[parent] end
+local function GetOrCreatePlayerHighlight(pd)
+    local cached = PlayerChamsCache[pd.Player]
+    if cached then
+        -- If character changed (respawn), destroy the old highlight
+        if cached.char ~= pd.Character then
+            pcall(function() cached.hl:Destroy() end)
+            PlayerChamsCache[pd.Player] = nil; lastChamsProps[pd.Player] = nil
+            cached = nil
+        elseif not cached.hl.Parent then
+            pcall(function() cached.hl:Destroy() end)
+            PlayerChamsCache[pd.Player] = nil; lastChamsProps[pd.Player] = nil
+            cached = nil
+        else
+            return cached.hl
+        end
     end
     local ok, h = pcall(function()
-        local hl = Instance.new("Highlight"); hl.Name = name or "AegisChams"; hl.Adornee = parent; hl.Parent = parent; return hl
+        local hl = Instance.new("Highlight"); hl.Name = "AegisC"
+        hl.Adornee = pd.Character; hl.Parent = pd.Character; return hl
     end)
-    if ok and h then cache[parent] = h; return h end
+    if ok and h then
+        PlayerChamsCache[pd.Player] = {hl=h, char=pd.Character}; return h
+    end
     return nil
 end
 
-local function RemoveHighlight(parent, cache)
-    if cache[parent] then pcall(function() cache[parent]:Destroy() end); cache[parent] = nil end
-    S.lastChamsProps[parent] = nil
+local function RemovePlayerHighlight(player)
+    local cached = PlayerChamsCache[player]
+    if cached then pcall(function() cached.hl:Destroy() end); PlayerChamsCache[player] = nil end
+    lastChamsProps[player] = nil
 end
 
-local function SetChamsProps(hl, parent, fc, oc, ft, ot, dm)
-    local last = S.lastChamsProps[parent]
+local function SetChamsProps(hl, player, fc, oc, ft, ot, dm)
+    local last = lastChamsProps[player]
     if last and last.fc==fc and last.oc==oc and last.ft==ft and last.ot==ot and last.dm==dm then return end
     hl.FillColor=fc; hl.OutlineColor=oc; hl.FillTransparency=ft; hl.OutlineTransparency=ot; hl.DepthMode=dm; hl.Enabled=true
-    S.lastChamsProps[parent] = {fc=fc,oc=oc,ft=ft,ot=ot,dm=dm}
+    lastChamsProps[player] = {fc=fc,oc=oc,ft=ft,ot=ot,dm=dm}
 end
 
 local function UpdatePlayerChams(pd)
-    local c = pd.Character
-    if pd.Player == LocalPlayer then RemoveHighlight(c, ChamsCache); return end
-    local h = GetHumanoid(c); if not h or h.Health <= 0 then RemoveHighlight(c, ChamsCache); return end
-    if not Toggles.ChamsEnabled.Value then RemoveHighlight(c, ChamsCache); return end
-    if pd.IsEnemy  and not Toggles.ChamsShowEnemy.Value  then RemoveHighlight(c, ChamsCache); return end
-    if not pd.IsEnemy and not pd.IsFriend and not Toggles.ChamsShowTeam.Value then RemoveHighlight(c, ChamsCache); return end
-    if pd.IsFriend and not Toggles.ChamsShowFriend.Value then RemoveHighlight(c, ChamsCache); return end
+    if pd.Player == LocalPlayer then RemovePlayerHighlight(pd.Player); return end
+    local hum = GetHumanoid(pd.Character); if not hum or hum.Health <= 0 then RemovePlayerHighlight(pd.Player); return end
+    if not Toggles.ChamsEnabled.Value then RemovePlayerHighlight(pd.Player); return end
+    if pd.IsEnemy      and not Toggles.ChamsShowEnemy.Value  then RemovePlayerHighlight(pd.Player); return end
+    if not pd.IsEnemy  and not pd.IsFriend and not Toggles.ChamsShowTeam.Value then RemovePlayerHighlight(pd.Player); return end
+    if pd.IsFriend     and not Toggles.ChamsShowFriend.Value then RemovePlayerHighlight(pd.Player); return end
     local fc, oc, ft, ot
     if pd.IsFriend then
         fc=Options.ChamsFriendColor.Value; oc=Options.ChamsFriendOutline.Value; ft=Options.ChamsFriendTrans.Value; ot=Options.ChamsFriendOutlineTrans.Value
@@ -1750,41 +1772,60 @@ local function UpdatePlayerChams(pd)
     else
         fc=Options.ChamsTeamColor.Value; oc=Options.ChamsTeamOutline.Value; ft=Options.ChamsTeamTrans.Value; ot=Options.ChamsTeamOutlineTrans.Value
     end
-    if Toggles.VisibleChamsEnabled.Value and IsCharacterVisible(c) then
+    if Toggles.VisibleChamsEnabled.Value and IsCharacterVisible(pd.Character) then
         fc=Options.VisibleChamsColor.Value; oc=Options.VisibleChamsOutline.Value; ft=Options.VisibleChamsTrans.Value; ot=Options.VisibleOutlineTrans.Value
     end
     if Toggles.ChamsVisibleOnly.Value then
-        if not IsCharacterVisible(c) then RemoveHighlight(c, ChamsCache); return end
+        if not IsCharacterVisible(pd.Character) then RemovePlayerHighlight(pd.Player); return end
         fc = pd.IsFriend and Options.VisibleFriendColor.Value or (pd.IsEnemy and Options.VisibleEnemyColor.Value or Options.VisibleTeamColor.Value)
     end
     local dm = Toggles.ChamsVisibleOnly.Value and Enum.HighlightDepthMode.Occluded or Enum.HighlightDepthMode.AlwaysOnTop
-    local hl = GetOrCreateHighlight(c, ChamsCache, "AegisC"); if not hl then return end
-    SetChamsProps(hl, c, fc, oc, ft, ot, dm)
+    local hl = GetOrCreatePlayerHighlight(pd); if not hl then return end
+    SetChamsProps(hl, pd.Player, fc, oc, ft, ot, dm)
 end
 
 local function UpdateWorldChams()
-    if not Toggles.ChamsWorldEnabled.Value then for i in pairs(WorldChamsCache) do RemoveHighlight(i, WorldChamsCache) end; return end
+    if not Toggles.ChamsWorldEnabled.Value then for i in pairs(WorldChamsCache) do
+        pcall(function() WorldChamsCache[i]:Destroy() end); WorldChamsCache[i]=nil
+    end; return end
     if tick()-S.lastWorldChamsUpdate < 0.5 then return end; S.lastWorldChamsUpdate = tick()
     local function A(objs, co, oo, to, oto)
         for _, obj in pairs(objs) do
             if not obj.Parent then continue end
-            local hl = GetOrCreateHighlight(obj, WorldChamsCache, "AWC")
-            if hl then SetChamsProps(hl, obj, co.Value, oo.Value, to.Value, oto.Value, Enum.HighlightDepthMode.AlwaysOnTop) end
+            if not WorldChamsCache[obj] then
+                local ok, h = pcall(function()
+                    local hl = Instance.new("Highlight"); hl.Name = "AWC"; hl.Adornee = obj; hl.Parent = obj; return hl
+                end)
+                if ok and h then WorldChamsCache[obj] = h end
+            end
+            local hl = WorldChamsCache[obj]; if not hl then continue end
+            hl.FillColor=co.Value; hl.OutlineColor=oo.Value; hl.FillTransparency=to.Value; hl.OutlineTransparency=oto.Value
+            hl.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop; hl.Enabled=true
         end
     end
-    A(cachedHP,          Options.HealthChamsColor,      Options.HealthChamsOutline,      Options.HealthChamsTrans,      Options.HealthChamsOutlineTrans)
-    A(cachedAmmo,        Options.AmmoChamsColor,         Options.AmmoChamsOutline,         Options.AmmoChamsTrans,         Options.AmmoChamsOutlineTrans)
-    A(cachedSentries,    Options.SentryChamsColor,       Options.SentryChamsOutline,       Options.SentryChamsTrans,       Options.SentryChamsOutlineTrans)
-    A(cachedDispensers,  Options.DispenserChamsColor,    Options.DispenserChamsOutline,    Options.DispenserChamsTrans,    Options.DispenserChamsOutlineTrans)
-    A(cachedTeleporters, Options.TeleporterChamsColor,   Options.TeleporterChamsOutline,   Options.TeleporterChamsTrans,   Options.TeleporterChamsOutlineTrans)
+    A(cachedHP,          Options.HealthChamsColor,     Options.HealthChamsOutline,     Options.HealthChamsTrans,     Options.HealthChamsOutlineTrans)
+    A(cachedAmmo,        Options.AmmoChamsColor,        Options.AmmoChamsOutline,        Options.AmmoChamsTrans,        Options.AmmoChamsOutlineTrans)
+    A(cachedSentries,    Options.SentryChamsColor,      Options.SentryChamsOutline,      Options.SentryChamsTrans,      Options.SentryChamsOutlineTrans)
+    A(cachedDispensers,  Options.DispenserChamsColor,   Options.DispenserChamsOutline,   Options.DispenserChamsTrans,   Options.DispenserChamsOutlineTrans)
+    A(cachedTeleporters, Options.TeleporterChamsColor,  Options.TeleporterChamsOutline,  Options.TeleporterChamsTrans,  Options.TeleporterChamsOutlineTrans)
 end
 
 local function UpdateProjectileChams()
-    if not Toggles.ChamsProjectilesEnabled.Value then for i in pairs(ProjectileChamsCache) do RemoveHighlight(i, ProjectileChamsCache) end; return end
+    if not Toggles.ChamsProjectilesEnabled.Value then for i in pairs(ProjectileChamsCache) do
+        pcall(function() ProjectileChamsCache[i]:Destroy() end); ProjectileChamsCache[i]=nil
+    end; return end
     if tick()-S.lastProjChamsUpdate < 0.3 then return end; S.lastProjChamsUpdate = tick()
     for _, obj in pairs(GetProjectiles()) do
-        local hl = GetOrCreateHighlight(obj, ProjectileChamsCache, "APC")
-        if hl then SetChamsProps(hl, obj, Options.ProjectileChamsColor.Value, Options.ProjectileChamsOutline.Value, Options.ProjectileChamsTrans.Value, Options.ProjectileChamsOutlineTrans.Value, Enum.HighlightDepthMode.AlwaysOnTop) end
+        if not ProjectileChamsCache[obj] then
+            local ok, h = pcall(function()
+                local hl = Instance.new("Highlight"); hl.Name = "APC"; hl.Adornee = obj; hl.Parent = obj; return hl
+            end)
+            if ok and h then ProjectileChamsCache[obj] = h end
+        end
+        local hl = ProjectileChamsCache[obj]; if not hl then continue end
+        hl.FillColor=Options.ProjectileChamsColor.Value; hl.OutlineColor=Options.ProjectileChamsOutline.Value
+        hl.FillTransparency=Options.ProjectileChamsTrans.Value; hl.OutlineTransparency=Options.ProjectileChamsOutlineTrans.Value
+        hl.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop; hl.Enabled=true
     end
 end
 
@@ -1795,17 +1836,14 @@ do
     local SG = Tabs.Aimbot:AddLeftGroupbox("Silent Aim", "crosshair")
     SG:AddToggle("SilentAimToggle", { Text="Enable Silent Aim", Default=false })
     Toggles.SilentAimToggle:OnChanged(function() Config.SilentAim.Enabled = Toggles.SilentAimToggle.Value end)
-
     SG:AddLabel("Aim Key"):AddKeyPicker("SilentAimKey", { Default="None", Mode="Hold", Text="Aim Key" })
-    SG:AddToggle("AutoShoot", { Text="Auto Shoot (while aiming)", Default=false })
-
+    SG:AddToggle("AutoShoot",     { Text="Auto Shoot (while aiming)", Default=false })
     SG:AddToggle("SilentAimMobile", { Text="Mobile Mode (Always On)", Default=false })
     Toggles.SilentAimMobile:OnChanged(function()
         if Options.SilentAimKey then Options.SilentAimKey.Mode = Toggles.SilentAimMobile.Value and "Always" or "Hold" end
     end)
-
     SG:AddToggle("SilentIgnoreInvis", { Text="Ignore Invisible", Default=true })
-    SG:AddSlider("SilentAimFOV", { Text="FOV Radius", Default=200, Min=10, Max=800, Rounding=0 })
+    SG:AddSlider("SilentAimFOV",  { Text="FOV Radius", Default=200, Min=10, Max=800, Rounding=0 })
     SG:AddToggle("ShowFOVCircle", { Text="Show FOV Circle", Default=true })
     SG:AddLabel("FOV Color"):AddColorPicker("FOVColor", { Default=Color3.new(1,1,1), Title="FOV Color" })
     SG:AddDropdown("SilentAimSort", { Values={"Closest to Mouse","Closest Distance"}, Default="Closest to Mouse", Text="Sort Mode" })
@@ -1825,11 +1863,20 @@ do
     PI:AddLabel("Indicator Color"):AddColorPicker("PredictionIndicatorColor", { Default=Color3.new(0,1,1), Title="Indicator Color" })
 end
 
+do
+    local NG = Tabs.Aimbot:AddLeftGroupbox("Notifications", "bell")
+    NG:AddToggle("ShowHits",       { Text="Show Hits",    Default=false, Callback=function(v) Config.Notifications.ShowHits=v end })
+    NG:AddToggle("EnableFlags",    { Text="Hit Flags",    Default=false, Callback=function(v) Config.Flags.Enabled=v end })
+    NG:AddToggle("ShowDamage",     { Text="Show Damage",  Default=false, Callback=function(v) Config.Flags.ShowDamage=v end })
+    NG:AddToggle("ShowRemainingHp",{ Text="Remaining HP", Default=false, Callback=function(v) Config.Flags.ShowRemainingHealth=v end })
+    NG:AddToggle("ShowHitName",    { Text="Show Name",    Default=false, Callback=function(v) Config.Flags.ShowName=v end })
+end
+
 ------------------------------------------------------------
 -- UI — VISUALS TAB
 ------------------------------------------------------------
 do
-    local ETB = Tabs.Visuals:AddLeftTabbox()
+    local ETB  = Tabs.Visuals:AddLeftTabbox()
     local ESPT = ETB:AddTab("Player ESP")
     ESPT:AddToggle("ESPEnabled",     { Text="Enable ESP",       Default=false })
     ESPT:AddToggle("ESPEnemy",       { Text="Show Enemy",       Default=true })
@@ -1837,65 +1884,75 @@ do
     ESPT:AddToggle("ESPFriends",     { Text="Show Friends",     Default=true })
     ESPT:AddToggle("ESPIgnoreInvis", { Text="Ignore Invisible", Default=true })
     ESPT:AddDivider()
-    ESPT:AddDropdown("ESPBoxType", { Values={"None","2D","3D","Corners"}, Default=2, Text="Box Type" })
+    ESPT:AddDropdown("ESPBoxType",    { Values={"None","2D","3D","Corners"}, Default=2, Text="Box Type" })
     ESPT:AddLabel("Box Color"):AddColorPicker("ESPBoxColor", { Default=Color3.new(1,0,0), Title="Box Color" })
-    ESPT:AddToggle("ESPDistance",      { Text="Distance",     Default=false })
-    ESPT:AddToggle("ESPSkeleton",      { Text="Skeleton",     Default=false })
-    ESPT:AddToggle("ESPWeapon",        { Text="Weapon",       Default=false })
-    ESPT:AddToggle("ESPClass",         { Text="Class",        Default=false })
-    ESPT:AddToggle("ESPHealthValue",   { Text="Health Value", Default=false })
-    ESPT:AddToggle("ESPHealthBar",     { Text="Health Bar",   Default=false })
-    ESPT:AddToggle("ESPHealthPercent", { Text="Health %",     Default=false })
-    ESPT:AddToggle("ESPStatus",        { Text="Status Effects",Default=false })
+    ESPT:AddToggle("ESPDistance",     { Text="Distance",      Default=false })
+    ESPT:AddToggle("ESPSkeleton",     { Text="Skeleton",      Default=false })
+    ESPT:AddToggle("ESPWeapon",       { Text="Weapon",        Default=false })
+    ESPT:AddToggle("ESPClass",        { Text="Class",         Default=false })
+    ESPT:AddToggle("ESPHealthValue",  { Text="Health Value",  Default=false })
+    ESPT:AddToggle("ESPHealthBar",    { Text="Health Bar",    Default=false })
+    ESPT:AddToggle("ESPHealthPercent",{ Text="Health %",      Default=false })
+    ESPT:AddToggle("ESPStatus",       { Text="Status Effects",Default=false })
     ESPT:AddDivider()
-    ESPT:AddToggle("ESPTracer", { Text="Tracers", Default=false })
+    ESPT:AddToggle("ESPTracer",       { Text="Tracers",       Default=false })
     ESPT:AddLabel("Tracer Color"):AddColorPicker("ESPTracerColor", { Default=Color3.new(1,0,0), Title="Tracer" })
     ESPT:AddDropdown("ESPTracerOrigin", { Values={"Bottom","Center","Top"}, Default="Bottom", Text="Origin" })
 
     local ESPO = ETB:AddTab("Object ESP")
-    ESPO:AddToggle("ObjESPEnabled",   { Text="Enable Object ESP", Default=false })
+    ESPO:AddToggle("ObjESPEnabled",    { Text="Enable Object ESP", Default=false })
     ESPO:AddDivider()
-    ESPO:AddToggle("ObjESPSentry",    { Text="Sentry",     Default=false })
-    ESPO:AddToggle("ObjESPDispenser", { Text="Dispenser",  Default=false })
-    ESPO:AddToggle("ObjESPTeleporter",{ Text="Teleporter", Default=false })
-    ESPO:AddToggle("ObjESPAmmo",      { Text="Ammo",       Default=false })
-    ESPO:AddToggle("ObjESPHP",        { Text="Health Packs",Default=false })
+    -- Enemy buildings
+    ESPO:AddToggle("ObjESPEnemySentry",     { Text="Enemy Sentry",      Default=false })
+    ESPO:AddToggle("ObjESPEnemyDispenser",  { Text="Enemy Dispenser",   Default=false })
+    ESPO:AddToggle("ObjESPEnemyTeleporter", { Text="Enemy Teleporter",  Default=false })
     ESPO:AddDivider()
-    ESPO:AddLabel("Object Color"):AddColorPicker("ObjESPBoxColor", { Default=Color3.new(1,1,0), Title="Obj Color" })
-    ESPO:AddToggle("ObjESPHealthValue",  { Text="Health Value", Default=false })
-    ESPO:AddToggle("ObjESPHealthBar",    { Text="Health Bar",   Default=false })
-    ESPO:AddToggle("ObjESPHealthPercent",{ Text="Health %",     Default=false })
+    -- Team buildings
+    ESPO:AddToggle("ObjESPTeamSentry",      { Text="Team Sentry",       Default=false })
+    ESPO:AddToggle("ObjESPTeamDispenser",   { Text="Team Dispenser",    Default=false })
+    ESPO:AddToggle("ObjESPTeamTeleporter",  { Text="Team Teleporter",   Default=false })
+    ESPO:AddDivider()
+    -- Pickups (no team distinction)
+    ESPO:AddToggle("ObjESPAmmo",            { Text="Ammo",              Default=false })
+    ESPO:AddToggle("ObjESPHP",              { Text="Health Packs",      Default=false })
+    ESPO:AddDivider()
+    ESPO:AddLabel("Enemy Color"):AddColorPicker("ObjESPEnemyColor",  { Default=Color3.new(1,0.2,0.2), Title="Enemy Color" })
+    ESPO:AddLabel("Team Color"):AddColorPicker("ObjESPTeamColor",    { Default=Color3.new(0.2,0.6,1), Title="Team Color" })
+    ESPO:AddLabel("Pickup Color"):AddColorPicker("ObjESPBoxColor",   { Default=Color3.new(1,1,0), Title="Pickup Color" })
+    ESPO:AddToggle("ObjESPHealthValue",   { Text="Health Value", Default=false })
+    ESPO:AddToggle("ObjESPHealthBar",     { Text="Health Bar",   Default=false })
+    ESPO:AddToggle("ObjESPHealthPercent", { Text="Health %",     Default=false })
 end
 
 do
     local CTB = Tabs.Visuals:AddLeftTabbox()
-    local CT = CTB:AddTab("Player Chams")
+    local CT  = CTB:AddTab("Player Chams")
     CT:AddToggle("ChamsEnabled",    { Text="Enable Chams",  Default=false })
     CT:AddToggle("ChamsShowEnemy",  { Text="Show Enemy",    Default=true })
     CT:AddToggle("ChamsShowTeam",   { Text="Show Team",     Default=false })
     CT:AddToggle("ChamsShowFriend", { Text="Show Friends",  Default=true })
     CT:AddDivider()
-    CT:AddLabel("Enemy Fill"):AddColorPicker("ChamsEnemyColor", { Default=Color3.new(1,0,0) })
-    CT:AddLabel("Enemy Outline"):AddColorPicker("ChamsEnemyOutline", { Default=Color3.new(0.5,0,0) })
-    CT:AddSlider("ChamsEnemyTrans",        { Text="Enemy Fill Trans",    Default=0, Min=0, Max=1, Rounding=2 })
-    CT:AddSlider("ChamsEnemyOutlineTrans", { Text="Enemy Outline Trans", Default=0, Min=0, Max=1, Rounding=2 })
+    CT:AddLabel("Enemy Fill"):AddColorPicker("ChamsEnemyColor",    { Default=Color3.new(1,0,0) })
+    CT:AddLabel("Enemy Outline"):AddColorPicker("ChamsEnemyOutline",{ Default=Color3.new(0.5,0,0) })
+    CT:AddSlider("ChamsEnemyTrans",       { Text="Enemy Fill Trans",    Default=0, Min=0, Max=1, Rounding=2 })
+    CT:AddSlider("ChamsEnemyOutlineTrans",{ Text="Enemy Outline Trans", Default=0, Min=0, Max=1, Rounding=2 })
     CT:AddDivider()
-    CT:AddLabel("Team Fill"):AddColorPicker("ChamsTeamColor", { Default=Color3.new(0,0,1) })
-    CT:AddLabel("Team Outline"):AddColorPicker("ChamsTeamOutline", { Default=Color3.new(0,0,0.5) })
-    CT:AddSlider("ChamsTeamTrans",        { Text="Team Fill Trans",    Default=0, Min=0, Max=1, Rounding=2 })
-    CT:AddSlider("ChamsTeamOutlineTrans", { Text="Team Outline Trans", Default=0, Min=0, Max=1, Rounding=2 })
+    CT:AddLabel("Team Fill"):AddColorPicker("ChamsTeamColor",    { Default=Color3.new(0,0,1) })
+    CT:AddLabel("Team Outline"):AddColorPicker("ChamsTeamOutline",{ Default=Color3.new(0,0,0.5) })
+    CT:AddSlider("ChamsTeamTrans",       { Text="Team Fill Trans",    Default=0, Min=0, Max=1, Rounding=2 })
+    CT:AddSlider("ChamsTeamOutlineTrans",{ Text="Team Outline Trans", Default=0, Min=0, Max=1, Rounding=2 })
     CT:AddDivider()
-    CT:AddLabel("Friend Fill"):AddColorPicker("ChamsFriendColor", { Default=Color3.new(0,1,0) })
-    CT:AddLabel("Friend Outline"):AddColorPicker("ChamsFriendOutline", { Default=Color3.new(0,0.5,0) })
-    CT:AddSlider("ChamsFriendTrans",        { Text="Friend Fill Trans",    Default=0, Min=0, Max=1, Rounding=2 })
-    CT:AddSlider("ChamsFriendOutlineTrans", { Text="Friend Outline Trans", Default=0, Min=0, Max=1, Rounding=2 })
+    CT:AddLabel("Friend Fill"):AddColorPicker("ChamsFriendColor",    { Default=Color3.new(0,1,0) })
+    CT:AddLabel("Friend Outline"):AddColorPicker("ChamsFriendOutline",{ Default=Color3.new(0,0.5,0) })
+    CT:AddSlider("ChamsFriendTrans",       { Text="Friend Fill Trans",    Default=0, Min=0, Max=1, Rounding=2 })
+    CT:AddSlider("ChamsFriendOutlineTrans",{ Text="Friend Outline Trans", Default=0, Min=0, Max=1, Rounding=2 })
 
     local VT = CTB:AddTab("Visible Chams")
     VT:AddToggle("VisibleChamsEnabled", { Text="Visible Chams Override", Default=false })
-    VT:AddLabel("Visible Fill"):AddColorPicker("VisibleChamsColor", { Default=Color3.new(1,1,0) })
-    VT:AddLabel("Visible Outline"):AddColorPicker("VisibleChamsOutline", { Default=Color3.new(0.5,0.5,0) })
-    VT:AddSlider("VisibleChamsTrans",   { Text="Fill Trans",    Default=0, Min=0, Max=1, Rounding=2 })
-    VT:AddSlider("VisibleOutlineTrans", { Text="Outline Trans", Default=0, Min=0, Max=1, Rounding=2 })
+    VT:AddLabel("Visible Fill"):AddColorPicker("VisibleChamsColor",    { Default=Color3.new(1,1,0) })
+    VT:AddLabel("Visible Outline"):AddColorPicker("VisibleChamsOutline",{ Default=Color3.new(0.5,0.5,0) })
+    VT:AddSlider("VisibleChamsTrans",  { Text="Fill Trans",    Default=0, Min=0, Max=1, Rounding=2 })
+    VT:AddSlider("VisibleOutlineTrans",{ Text="Outline Trans", Default=0, Min=0, Max=1, Rounding=2 })
     VT:AddDivider()
     VT:AddToggle("ChamsVisibleOnly", { Text="Visible Only Mode", Default=false })
     VT:AddLabel("Vis Enemy"):AddColorPicker("VisibleEnemyColor",  { Default=Color3.new(1,0,0) })
@@ -1906,36 +1963,36 @@ end
 do
     local WG = Tabs.Visuals:AddRightGroupbox("World Chams", "layers")
     WG:AddToggle("ChamsWorldEnabled", { Text="World Chams", Default=false })
-    WG:AddLabel("HP Fill"):AddColorPicker("HealthChamsColor", { Default=Color3.new(0,1,0) })
-    WG:AddLabel("HP Outline"):AddColorPicker("HealthChamsOutline", { Default=Color3.new(0,0.5,0) })
-    WG:AddSlider("HealthChamsTrans",        { Text="HP Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
-    WG:AddSlider("HealthChamsOutlineTrans", { Text="HP Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddLabel("HP Fill"):AddColorPicker("HealthChamsColor",    { Default=Color3.new(0,1,0) })
+    WG:AddLabel("HP Outline"):AddColorPicker("HealthChamsOutline",{ Default=Color3.new(0,0.5,0) })
+    WG:AddSlider("HealthChamsTrans",       { Text="HP Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddSlider("HealthChamsOutlineTrans",{ Text="HP Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
     WG:AddDivider()
-    WG:AddLabel("Ammo Fill"):AddColorPicker("AmmoChamsColor", { Default=Color3.new(1,0.5,0) })
-    WG:AddLabel("Ammo Outline"):AddColorPicker("AmmoChamsOutline", { Default=Color3.new(0.5,0.25,0) })
-    WG:AddSlider("AmmoChamsTrans",        { Text="Ammo Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
-    WG:AddSlider("AmmoChamsOutlineTrans", { Text="Ammo Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddLabel("Ammo Fill"):AddColorPicker("AmmoChamsColor",    { Default=Color3.new(1,0.5,0) })
+    WG:AddLabel("Ammo Outline"):AddColorPicker("AmmoChamsOutline",{ Default=Color3.new(0.5,0.25,0) })
+    WG:AddSlider("AmmoChamsTrans",       { Text="Ammo Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddSlider("AmmoChamsOutlineTrans",{ Text="Ammo Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
     WG:AddDivider()
-    WG:AddLabel("Sentry Fill"):AddColorPicker("SentryChamsColor", { Default=Color3.new(1,0,0.5) })
-    WG:AddLabel("Sentry Outline"):AddColorPicker("SentryChamsOutline", { Default=Color3.new(0.5,0,0.25) })
-    WG:AddSlider("SentryChamsTrans",        { Text="Sentry Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
-    WG:AddSlider("SentryChamsOutlineTrans", { Text="Sentry Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddLabel("Sentry Fill"):AddColorPicker("SentryChamsColor",    { Default=Color3.new(1,0,0.5) })
+    WG:AddLabel("Sentry Outline"):AddColorPicker("SentryChamsOutline",{ Default=Color3.new(0.5,0,0.25) })
+    WG:AddSlider("SentryChamsTrans",       { Text="Sentry Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddSlider("SentryChamsOutlineTrans",{ Text="Sentry Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
     WG:AddDivider()
-    WG:AddLabel("Dispenser Fill"):AddColorPicker("DispenserChamsColor", { Default=Color3.new(0,1,1) })
-    WG:AddLabel("Dispenser Outline"):AddColorPicker("DispenserChamsOutline", { Default=Color3.new(0,0.5,0.5) })
-    WG:AddSlider("DispenserChamsTrans",        { Text="Dispenser Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
-    WG:AddSlider("DispenserChamsOutlineTrans", { Text="Dispenser Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddLabel("Dispenser Fill"):AddColorPicker("DispenserChamsColor",    { Default=Color3.new(0,1,1) })
+    WG:AddLabel("Dispenser Outline"):AddColorPicker("DispenserChamsOutline",{ Default=Color3.new(0,0.5,0.5) })
+    WG:AddSlider("DispenserChamsTrans",       { Text="Dispenser Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddSlider("DispenserChamsOutlineTrans",{ Text="Dispenser Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
     WG:AddDivider()
-    WG:AddLabel("Teleporter Fill"):AddColorPicker("TeleporterChamsColor", { Default=Color3.new(0.5,0,1) })
-    WG:AddLabel("Teleporter Outline"):AddColorPicker("TeleporterChamsOutline", { Default=Color3.new(0.25,0,0.5) })
-    WG:AddSlider("TeleporterChamsTrans",        { Text="Teleporter Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
-    WG:AddSlider("TeleporterChamsOutlineTrans", { Text="Teleporter Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddLabel("Teleporter Fill"):AddColorPicker("TeleporterChamsColor",    { Default=Color3.new(0.5,0,1) })
+    WG:AddLabel("Teleporter Outline"):AddColorPicker("TeleporterChamsOutline",{ Default=Color3.new(0.25,0,0.5) })
+    WG:AddSlider("TeleporterChamsTrans",       { Text="Teleporter Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddSlider("TeleporterChamsOutlineTrans",{ Text="Teleporter Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
     WG:AddDivider()
     WG:AddToggle("ChamsProjectilesEnabled", { Text="Projectile Chams", Default=false })
-    WG:AddLabel("Projectile Fill"):AddColorPicker("ProjectileChamsColor", { Default=Color3.new(1,1,0) })
-    WG:AddLabel("Projectile Outline"):AddColorPicker("ProjectileChamsOutline", { Default=Color3.new(0.5,0.5,0) })
-    WG:AddSlider("ProjectileChamsTrans",        { Text="Projectile Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
-    WG:AddSlider("ProjectileChamsOutlineTrans", { Text="Projectile Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddLabel("Projectile Fill"):AddColorPicker("ProjectileChamsColor",    { Default=Color3.new(1,1,0) })
+    WG:AddLabel("Projectile Outline"):AddColorPicker("ProjectileChamsOutline",{ Default=Color3.new(0.5,0.5,0) })
+    WG:AddSlider("ProjectileChamsTrans",       { Text="Projectile Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddSlider("ProjectileChamsOutlineTrans",{ Text="Projectile Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
 end
 
 local OL
@@ -1944,9 +2001,9 @@ do
     VR:AddInput("SkyboxID", { Default="", Numeric=true, Finished=true, Text="Skybox ID", Placeholder="Asset ID" })
     VR:AddSlider("TimeSlider", { Text="Time of Day", Default=12, Min=0, Max=24, Rounding=1, Suffix=" hrs" })
     VR:AddLabel("Ambient"):AddColorPicker("AmbientColor", { Default=Lighting.Ambient, Title="Ambient" })
-    VR:AddToggle("FullbrightToggle", { Text="Fullbright",       Default=false })
-    VR:AddToggle("NoFogToggle",      { Text="No Fog",           Default=false })
-    VR:AddToggle("SightlinesToggle", { Text="Marksman Sightlines",Default=false })
+    VR:AddToggle("FullbrightToggle", { Text="Fullbright",          Default=false })
+    VR:AddToggle("NoFogToggle",      { Text="No Fog",              Default=false })
+    VR:AddToggle("SightlinesToggle", { Text="Marksman Sightlines", Default=false })
 
     OL = {Ambient=Lighting.Ambient, Brightness=Lighting.Brightness, FogEnd=Lighting.FogEnd,
           FogStart=Lighting.FogStart, ClockTime=Lighting.ClockTime, OutdoorAmbient=Lighting.OutdoorAmbient}
@@ -2001,11 +2058,11 @@ end
 
 do
     local MA = Tabs.Misc:AddRightGroupbox("Automation", "cpu")
-    MA:AddToggle("AutoStickyDetonate", { Text="Auto Sticky Detonate",    Default=false })
-    MA:AddToggle("AutoStickyVisibleOnly", { Text="Visible Only (Sticky)", Default=false })
+    MA:AddToggle("AutoStickyDetonate",  { Text="Auto Sticky Detonate",    Default=false })
+    MA:AddToggle("AutoStickyVisibleOnly",{ Text="Visible Only (Sticky)",  Default=false })
     MA:AddDivider()
-    MA:AddToggle("AutoAirblast",    { Text="Auto Airblast",          Default=false })
-    MA:AddToggle("AutoAirblastExt", { Text="Extinguish Teammates",   Default=false })
+    MA:AddToggle("AutoAirblast",    { Text="Auto Airblast",         Default=false })
+    MA:AddToggle("AutoAirblastExt", { Text="Extinguish Teammates",  Default=false })
     MA:AddDivider()
     MA:AddToggle("AutoUberToggle", { Text="Auto Uber [Doctor]", Default=false })
     Toggles.AutoUberToggle:OnChanged(function() Config.AutoUber.Enabled = Toggles.AutoUberToggle.Value end)
@@ -2021,35 +2078,29 @@ end
 do
     local EL = Tabs.Exploits:AddLeftGroupbox("Exploits", "zap")
 
-    EL:AddLabel("skidded from AeGiS"):AddKeyPicker("AAKeybind", { Default="None", Mode="Toggle", Text="Anti-Aim",
+    EL:AddLabel("Anti-Aim"):AddKeyPicker("AAKeybind", { Default="None", Mode="Toggle", Text="Anti-Aim",
         Callback=function(v) Config.AntiAim.Enabled = v end })
-    EL:AddDropdown("AAMode", { Values={"jitter","backwards","spin"}, Default="jitter", Text="Mode",
-        Callback=function(v) Config.AntiAim.Mode=v end })
-    EL:AddSlider("JitterAngle", { Text="Jitter Angle", Default=90, Min=0, Max=180, Rounding=0,
-        Callback=function(v) Config.AntiAim.JitterAngle=v end })
-    EL:AddSlider("JitterSpeed", { Text="Jitter Speed", Default=15, Min=1, Max=60, Rounding=0,
-        Callback=function(v) Config.AntiAim.JitterSpeed=v end })
-    EL:AddSlider("SpinSpeed", { Text="Spin Speed", Default=180, Min=1, Max=1080, Rounding=0,
-        Callback=function(v) Config.AntiAim.AntiAimSpeed=v end })
+    EL:AddDropdown("AAMode",    { Values={"jitter","backwards","spin"}, Default="jitter", Text="Mode",         Callback=function(v) Config.AntiAim.Mode=v end })
+    EL:AddSlider("JitterAngle", { Text="Jitter Angle", Default=90,  Min=0,   Max=180,  Rounding=0, Callback=function(v) Config.AntiAim.JitterAngle=v end })
+    EL:AddSlider("JitterSpeed", { Text="Jitter Speed", Default=15,  Min=1,   Max=60,   Rounding=0, Callback=function(v) Config.AntiAim.JitterSpeed=v end })
+    EL:AddSlider("SpinSpeed",   { Text="Spin Speed",   Default=180, Min=1,   Max=1080, Rounding=0, Callback=function(v) Config.AntiAim.AntiAimSpeed=v end })
     EL:AddDivider()
 
     EL:AddToggle("WallbangToggle", { Text="Wallbang", Default=false,
         Callback=function(v)
             Config.Wallbang.Enable = v
-            if v then InstallWallbangHook(); Notify("Wallbang is obvious!", 4) else RemoveWallbangHook() end
+            if v then InstallWallbangHook() else RemoveWallbangHook() end
         end })
     EL:AddToggle("NoSpreadToggle", { Text="No Spread", Default=false,
         Callback=function(v)
             Config.NoSpread.Enable = v
-            if v then EnsureGUILoaded(); SetupNoSpread(); Notify("No Spread is obvious!", 4)
+            if v then EnsureGUILoaded(); SetupNoSpread()
                 if S.kirk then S.charlieKirk=true; S.kirk.Value=S.kirk.Value*Config.NoSpread.Multiplier; S.charlieKirk=false end
             end
         end })
-    EL:AddSlider("SpreadMultiplier", { Text="Spread Multiplier", Default=0.2, Min=0.2, Max=1, Rounding=2,
-        Callback=function(v) Config.NoSpread.Multiplier=v end })
+    EL:AddSlider("SpreadMultiplier", { Text="Spread Multiplier", Default=0.2, Min=0.2, Max=1, Rounding=2, Callback=function(v) Config.NoSpread.Multiplier=v end })
     EL:AddDivider()
 
-    EL:AddLabel("Obvious feature")
     EL:AddToggle("SpeedToggle", { Text="Speed", Default=false })
         :AddKeyPicker("SpeedKey", { Default="None", Mode="Toggle", Text="Speed", SyncToggleState=true })
     Toggles.SpeedToggle:OnChanged(function()
@@ -2057,10 +2108,7 @@ do
         if not Toggles.SpeedToggle.Value and S.speedConnection then S.speedConnection:Disconnect(); S.speedConnection=nil end
     end)
     EL:AddSlider("SpeedValue", { Text="Speed Value", Default=300, Min=1, Max=600, Rounding=0,
-        Callback=function(v)
-            Config.Speed.Value = v
-            if Config.Speed.Enable and LocalPlayer.Character then LocalPlayer.Character:SetAttribute("Speed", v) end
-        end })
+        Callback=function(v) Config.Speed.Value=v; if Config.Speed.Enable and LocalPlayer.Character then LocalPlayer.Character:SetAttribute("Speed",v) end end })
 end
 
 do
@@ -2068,16 +2116,15 @@ do
     AB:AddToggle("AutoBackstab",        { Text="Auto Backstab",    Default=false })
     AB:AddToggle("BackstabIgnoreInvis", { Text="Ignore Invisible", Default=true })
     AB:AddDivider()
-    AB:AddLabel("forgot to add freeze")
     AB:AddToggle("AutoWarp", { Text="Auto Warp Behind", Default=false })
     AB:AddLabel("Warp Key"):AddKeyPicker("WarpKey", { Default="None", Mode="Toggle", Text="Warp" })
 end
 
 do
     local AM = Tabs.Exploits:AddLeftGroupbox("Auto Melee", "swords")
-    AM:AddToggle("AutoMelee",       { Text="Auto Melee",       Default=false })
-    AM:AddToggle("MeleeIgnoreInvis",{ Text="Ignore Invisible", Default=true })
-    AM:AddDropdown("AutoMeleeMode", { Values={"Rage","Demoknight"}, Default="Rage", Text="Melee Mode" })
+    AM:AddToggle("AutoMelee",        { Text="Auto Melee",       Default=false })
+    AM:AddToggle("MeleeIgnoreInvis", { Text="Ignore Invisible", Default=true })
+    AM:AddDropdown("AutoMeleeMode",  { Values={"Rage","Demoknight"}, Default="Rage", Text="Melee Mode" })
 end
 
 do
@@ -2086,22 +2133,15 @@ do
     TL:AddLabel("Telestab Bind"):AddKeyPicker("TelestabKey", { Default="None", Mode="Hold", Text="Telestab" })
 end
 
-do
-    local ER = Tabs.Exploits:AddRightGroupbox("Notifications", "bell")
-    ER:AddToggle("ShowHits",     { Text="Show Hits",       Default=false, Callback=function(v) Config.Notifications.ShowHits=v end })
-    ER:AddToggle("EnableFlags",  { Text="Hit Flags",       Default=false, Callback=function(v) Config.Flags.Enabled=v end })
-    ER:AddToggle("ShowDamage",   { Text="Show Damage",     Default=false, Callback=function(v) Config.Flags.ShowDamage=v end })
-    ER:AddToggle("ShowRemainingHp",{ Text="Remaining HP",  Default=false, Callback=function(v) Config.Flags.ShowRemainingHealth=v end })
-    ER:AddToggle("ShowHitName",  { Text="Show Name",       Default=false, Callback=function(v) Config.Flags.ShowName=v end })
-end
+
 
 do
-    local VIP = Tabs.Exploits:AddRightGroupbox("VIP / Other", "crown")
+    local VIP = Tabs.Exploits:AddRightGroupbox("Other", "crown")
     VIP:AddToggle("NoVoiceCooldown", { Text="No Voice Cooldown", Default=false,
         Callback=function(v) pcall(function() ReplicatedStorage.VIPSettings.NoVoiceCooldown.Value=v end) end })
-    VIP:AddToggle("ThirdPersonMode", { Text="Third Person", Default=false,
+    VIP:AddToggle("ThirdPersonMode", { Text="Third Person",      Default=false,
         Callback=function(v) ApplyThirdPerson(v) end })
-    VIP:AddToggle("HealSelfToggle", { Text="Heal Self [Medic]", Default=false })
+    VIP:AddToggle("HealSelfToggle",  { Text="Heal Self [Medic]", Default=false })
     VIP:AddLabel("Heal Self Bind"):AddKeyPicker("HealSelfKey", { Default="None", Mode="Toggle", Text="Heal Self" })
 end
 
@@ -2163,7 +2203,7 @@ local function CheckAutoUber()
             local uber = L:FindFirstChild("uber"); if uber and uber.Value >= 100 then uberReady=true end
         end)
         if not uberReady then return end
-        local myPct   = (hum.Health/hum.MaxHealth)*100; local threshold=Config.AutoUber.HealthPercent
+        local myPct = (hum.Health/hum.MaxHealth)*100; local threshold=Config.AutoUber.HealthPercent
         if Config.AutoUber.Condition=="Self" or Config.AutoUber.Condition=="Both" then
             if myPct <= threshold then RightClick(); return end
         end
@@ -2189,24 +2229,26 @@ local function RunAutoAirblast()
         if LocalPlayer:FindFirstChild("Status") and LocalPlayer.Status.Class.Value ~= "Arsonist" then return end
         local lc=GetLocalCharacter(); if not lc then return end
         local lhrp=GetHRP(lc); if not lhrp then return end
-        for _, v in pairs(Workspace:FindFirstChild("Ray_ignore"):GetChildren()) do
+        local ri = Workspace:FindFirstChild("Ray_ignore")
+        if ri then for _, v in pairs(ri:GetChildren()) do
             if v:GetAttribute("ProjectileType") and v:GetAttribute("Team") ~= LocalPlayer.Status.Team.Value then
                 local _, OnScr = Camera:WorldToViewportPoint(v.Position)
                 if OnScr and (v.Position-lhrp.Position).Magnitude <= 13 then
                     RightClick(); S.lastAirblastTime=tick(); return
                 end
             end
-        end
-        for _, v in pairs(Workspace:FindFirstChild("Destructable"):GetChildren()) do
+        end end
+        local dest = Workspace:FindFirstChild("Destructable")
+        if dest then for _, v in pairs(dest:GetChildren()) do
             if v.Name:match("stickybomb") and v:GetAttribute("Team") ~= LocalPlayer.Status.Team.Value then
                 local _, OnScr = Camera:WorldToViewportPoint(v.Position)
                 if OnScr and (v.Position-lhrp.Position).Magnitude <= 13 then
                     RightClick(); S.lastAirblastTime=tick(); return
                 end
             end
-        end
+        end end
         if Toggles.AutoAirblastExt and Toggles.AutoAirblastExt.Value then
-            for _, plr in pairs(Players:GetPlayers()) do
+            for _, plr in pairs(cachedPlayerList) do
                 if plr ~= LocalPlayer and plr.Character and plr.Team==LocalPlayer.Team then
                     local conds = plr.Character:FindFirstChild("Conditions")
                     if conds and conds:GetAttribute("Engulfed") then
@@ -2226,7 +2268,6 @@ local function RunSilentAimLogic()
     S.silentAimKeyActive = isMobileMode or Options.SilentAimKey:GetState()
 
     if not S.silentAimKeyActive then
-        -- Release mouse if we were shooting
         if S.shooting then
             if isMobileMode then pcall(function() LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables.Held1.Value=false end)
             else VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0) end
@@ -2240,7 +2281,6 @@ local function RunSilentAimLogic()
 
     local target = FrameCache.silentTarget
     if target and Toggles.AutoShoot and Toggles.AutoShoot.Value then
-        -- Auto shoot
         if isMobileMode then
             pcall(function()
                 local L = LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables
@@ -2255,7 +2295,6 @@ local function RunSilentAimLogic()
             end
         end
     elseif not target and S.shooting then
-        -- No target — stop shooting
         if isMobileMode then pcall(function() LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables.Held1.Value=false end)
         else VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0) end
         S.shooting = false
@@ -2286,8 +2325,7 @@ local function RunAntiAim(dt)
     if not LocalPlayer:GetAttribute("ThirdPerson") then return end
     local fwd = Vector3.new(Camera.CFrame.LookVector.X, 0, Camera.CFrame.LookVector.Z).Unit
     local nl
-    if Config.AntiAim.Mode=="backwards" then
-        nl = -fwd
+    if     Config.AntiAim.Mode=="backwards" then nl = -fwd
     elseif Config.AntiAim.Mode=="jitter" then
         if tick()-S.lastJitterUpdate >= 1/Config.AntiAim.JitterSpeed then S.jitterDir=-S.jitterDir; S.lastJitterUpdate=tick() end
         local y = math.rad(Config.AntiAim.JitterAngle*S.jitterDir)
@@ -2299,6 +2337,7 @@ local function RunAntiAim(dt)
     if nl then hrp.CFrame = CFrame.new(hrp.Position, hrp.Position+nl) end
 end
 
+
 local function RunAutoBackstab(playerData)
     if not (Toggles.AutoBackstab and Toggles.AutoBackstab.Value) then return end
     if GetLocalClass() ~= "Agent" or not BackstabWeapons[GetLocalWeapon()] then return end
@@ -2309,6 +2348,7 @@ local function RunAutoBackstab(playerData)
         if Toggles.BackstabIgnoreInvis.Value and IsCharacterInvisible(pd.Character) then continue end
         local toT = (pd.HRP.Position-lh.Position).Unit
         if toT:Dot(pd.HRP.CFrame.LookVector) > 0.3 then
+            if not HasLineOfSight(lh.Position, pd.HRP.Position) then continue end
             foundTarget = true
             if S.lastBackstabTarget ~= pd.Player then S.lastBackstabTarget=pd.Player; Notify("Backstab: "..pd.Player.Name, 2) end
             if not S.shooting then
@@ -2327,12 +2367,12 @@ local function RunAutoMelee(playerData)
     if Toggles.AutoBackstab and Toggles.AutoBackstab.Value and GetLocalClass()=="Agent" then return end
     if not MeleeWeapons[GetLocalWeapon()] then return end
     local lc=GetLocalCharacter(); local lh=lc and GetHRP(lc); if not lh then return end
-    local meleeMode  = Options.AutoMeleeMode and Options.AutoMeleeMode.Value or "Rage"
-    local meleeRange = meleeMode=="Demoknight" and MELEE_RANGE_DEMOKNIGHT or MELEE_RANGE_RAGE
+    local meleeRange = (Options.AutoMeleeMode and Options.AutoMeleeMode.Value=="Demoknight") and MELEE_RANGE_DEMOKNIGHT or MELEE_RANGE_RAGE
     for _, pd in ipairs(playerData) do
         if not pd.IsEnemy or pd.Distance > meleeRange then continue end
         if Toggles.MeleeIgnoreInvis.Value and IsCharacterInvisible(pd.Character) then continue end
-        if S.lastMeleeTarget ~= pd.Player then S.lastMeleeTarget = pd.Player end
+        if not HasLineOfSight(lh.Position, pd.HRP.Position) then continue end
+        S.lastMeleeTarget = pd.Player
         if not S.shooting then
             VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,0); S.shooting=true; S.lastShotTime=tick()
         elseif tick()-S.lastShotTime >= 0.15 then
@@ -2421,7 +2461,7 @@ do
             healthCache[plr] = newHealth
         end)
     end
-    for _, plr in ipairs(Players:GetPlayers()) do
+    for _, plr in ipairs(cachedPlayerList) do
         if plr.Character then TrackCharacter(plr) end
         plr.CharacterAdded:Connect(function() task.wait(0.3); TrackCharacter(plr) end)
     end
@@ -2438,15 +2478,34 @@ LogService.MessageOut:Connect(function(message)
 end)
 
 ------------------------------------------------------------
+-- CHEATER DETECTOR
+------------------------------------------------------------
+do
+    local notifiedCheaters = {}
+    local function CheckCheater(player)
+        if player == LocalPlayer then return end
+        if CheaterList[player.UserId] and not notifiedCheaters[player.UserId] then
+            notifiedCheaters[player.UserId] = true
+            Notify("known cheater: " .. player.Name, 10)
+        end
+    end
+    for _, p in ipairs(cachedPlayerList) do task.spawn(function() task.wait(2); CheckCheater(p) end) end
+    Players.PlayerAdded:Connect(function(player)
+        task.wait(1); CheckCheater(player)
+        if CheaterList[player.UserId] then
+            Notify("known cheater joined: " .. player.Name, 10)
+        end
+    end)
+    Players.PlayerRemoving:Connect(function(p) notifiedCheaters[p.UserId] = nil end)
+end
+
+------------------------------------------------------------
 -- MOD / STAFF DETECTOR
--- Reads newTcPlayer attributes for each player.
--- Fires a persistent notification if any staff attribute is true.
--- Always active — no toggle.
 ------------------------------------------------------------
 do
     local STAFF_ATTRS = {
-        "IsGroupCoder", "IsGroupContributor", "IsGroupDeveloper",
-        "IsGroupMapper", "IsGroupModerator",  "IsGroupTester",
+        "IsGroupCoder","IsGroupContributor","IsGroupDeveloper",
+        "IsGroupMapper","IsGroupModerator","IsGroupTester",
     }
     local alreadyNotified = {}
 
@@ -2461,11 +2520,10 @@ do
             end
         end
         if #found > 0 then
-            local key   = player.UserId
-            local label = table.concat(found, "/")
+            local key = player.UserId; local label = table.concat(found, "/")
             if alreadyNotified[key] ~= label then
                 alreadyNotified[key] = label
-                Notify("hey buddy theres someone special in ur server: " .. player.Name .. " [" .. label .. "]", 10)
+                Notify("staff in server: " .. player.Name .. " [" .. label .. "]", 10)
             end
         end
     end
@@ -2478,15 +2536,14 @@ do
 
     local function SetupPlayer(player)
         task.spawn(function()
-            task.wait(2)
-            pcall(HookNTP, player)
+            task.wait(2); pcall(HookNTP, player)
             player.ChildAdded:Connect(function(child)
                 if child.Name == "newTcPlayer" then task.wait(0.5); pcall(HookNTP, player) end
             end)
         end)
     end
 
-    for _, p in ipairs(Players:GetPlayers()) do SetupPlayer(p) end
+    for _, p in ipairs(cachedPlayerList) do SetupPlayer(p) end
     Players.PlayerAdded:Connect(SetupPlayer)
     Players.PlayerRemoving:Connect(function(p) alreadyNotified[p.UserId] = nil end)
 end
@@ -2544,14 +2601,27 @@ local MainConnection = RunService.RenderStepped:Connect(function(dt)
     -- Object ESP
     if Toggles.ObjESPEnabled.Value then
         local act = {}
-        local function P(cache, tog, name)
-            if tog.Value then for _, o in pairs(cache) do if o.Parent then act[o]=true; UpdateObjectESP(o,name) end end end
+        -- Buildings: split by enemy/team
+        local function PBuilding(cache, enemyTog, teamTog, label)
+            for _, o in pairs(cache) do
+                if not o.Parent then continue end
+                local side = GetBuildingTeam(o)
+                local show = (side=="enemy" and enemyTog.Value) or (side=="team" and teamTog.Value)
+                if show then
+                    local col = side=="enemy" and Options.ObjESPEnemyColor.Value or Options.ObjESPTeamColor.Value
+                    act[o] = true; UpdateObjectESP(o, label, col)
+                end
+            end
         end
-        P(cachedSentries,    Toggles.ObjESPSentry,     "Sentry")
-        P(cachedDispensers,  Toggles.ObjESPDispenser,  "Dispenser")
-        P(cachedTeleporters, Toggles.ObjESPTeleporter, "Teleporter")
-        P(cachedAmmo,        Toggles.ObjESPAmmo,       "Ammo")
-        P(cachedHP,          Toggles.ObjESPHP,         "HP")
+        PBuilding(cachedSentries,    Toggles.ObjESPEnemySentry,    Toggles.ObjESPTeamSentry,    "Sentry")
+        PBuilding(cachedDispensers,  Toggles.ObjESPEnemyDispenser, Toggles.ObjESPTeamDispenser, "Dispenser")
+        PBuilding(cachedTeleporters, Toggles.ObjESPEnemyTeleporter,Toggles.ObjESPTeamTeleporter,"Teleporter")
+        -- Pickups: no team distinction
+        local function PPickup(cache, tog, name)
+            if tog.Value then for _, o in pairs(cache) do if o.Parent then act[o]=true; UpdateObjectESP(o, name, Options.ObjESPBoxColor.Value) end end end
+        end
+        PPickup(cachedAmmo, Toggles.ObjESPAmmo, "Ammo")
+        PPickup(cachedHP,   Toggles.ObjESPHP,   "HP")
         for i in pairs(ObjectESPCache) do if not act[i] or not i.Parent then HideObjectESP(i) end end
     else for i in pairs(ObjectESPCache) do HideObjectESP(i) end end
 
@@ -2559,7 +2629,6 @@ local MainConnection = RunService.RenderStepped:Connect(function(dt)
 
     if Toggles.UsernameHider.Value then UpdateUsernameHider() end
 
-    -- Agent notification
     if Toggles.AgentNotification and Toggles.AgentNotification.Value and tick()-S.lastAgentNotif > 3 then
         for _, pd in ipairs(playerData) do
             if pd.IsEnemy and pd.Class=="Agent" and pd.Distance <= 30 then
@@ -2573,8 +2642,8 @@ local MainConnection = RunService.RenderStepped:Connect(function(dt)
     -- Telestab
     if Toggles.TelestabToggle.Value and Options.TelestabKey:GetState() then
         local lc=GetLocalCharacter(); if lc then local lh=GetHRP(lc); if lh then
-            local bestChar, bestDist = nil, 9e9
-            for _, pd in ipairs(playerData) do if pd.IsEnemy and pd.Distance < bestDist then bestDist=pd.Distance; bestChar=pd.Character end end
+            local bestChar, bestDist2 = nil, 9e9
+            for _, pd in ipairs(playerData) do if pd.IsEnemy and pd.Distance < bestDist2 then bestDist2=pd.Distance; bestChar=pd.Character end end
             if bestChar then
                 for _, v in pairs(bestChar:GetChildren()) do if v:IsA("BasePart") then v.CanCollide=false end end
                 local uh = GetHRP(bestChar); if uh then uh.CFrame = lh.CFrame + lh.CFrame.LookVector * 3.25 end
@@ -2594,13 +2663,9 @@ local MainConnection = RunService.RenderStepped:Connect(function(dt)
 end)
 
 ------------------------------------------------------------
--- FPS COUNTER
+-- FPS COUNTER & WATERMARK
 ------------------------------------------------------------
 task.spawn(function() while true do task.wait(1); if Library.Unloaded then break end; S.fps=S.frames; S.frames=0 end end)
-
-------------------------------------------------------------
--- WATERMARK
-------------------------------------------------------------
 task.spawn(function() while true do task.wait(1); if Library.Unloaded then break end
     local ping=0; pcall(function() ping=math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
     Library:SetWatermark(("Aegis.dev / %d fps / %d ms"):format(S.fps, ping))
@@ -2612,9 +2677,10 @@ Library:SetWatermarkVisibility(true)
 ------------------------------------------------------------
 Players.PlayerRemoving:Connect(function(player)
     DestroyPlayerESP(player)
-    local c = GetCharacter(player); if c then RemoveHighlight(c, ChamsCache) end
+    RemovePlayerHighlight(player)
     healthCache[player]=nil; playerVelocities[player]=nil; playerAccelerations[player]=nil
     playerVerticalHistory[player]=nil; playerStrafeHistory[player]=nil; playerPositionHistory[player]=nil
+    lastChamsProps[player]=nil
 end)
 
 ------------------------------------------------------------
@@ -2652,9 +2718,9 @@ SaveManager:LoadAutoloadConfig()
 Library:OnUnload(function()
     for p in pairs(ESPObjects)    do DestroyPlayerESP(p) end
     for i in pairs(ObjectESPCache) do DestroyObjectESP(i) end
-    for i in pairs(ChamsCache)         do RemoveHighlight(i, ChamsCache) end
-    for i in pairs(WorldChamsCache)    do RemoveHighlight(i, WorldChamsCache) end
-    for i in pairs(ProjectileChamsCache) do RemoveHighlight(i, ProjectileChamsCache) end
+    for p in pairs(PlayerChamsCache) do RemovePlayerHighlight(p) end
+    for i in pairs(WorldChamsCache)  do pcall(function() WorldChamsCache[i]:Destroy() end) end
+    for i in pairs(ProjectileChamsCache) do pcall(function() ProjectileChamsCache[i]:Destroy() end) end
     FOVCircle:Remove(); pcall(function() PredictionIndicator:Remove() end)
     DestroyMobileButton()
     if OL then
@@ -2669,4 +2735,4 @@ Library:OnUnload(function()
     Library.Unloaded = true
 end)
 
-print("[Aegis] Loaded — TC2 PlaceId confirmed.")
+print("[Aegis] Injected (but gay)")
