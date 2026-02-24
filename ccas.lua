@@ -5,7 +5,7 @@
 -- PLACE CHECK
 ------------------------------------------------------------
 if game.PlaceId ~= 328028363 then
-    game:GetService("Players").LocalPlayer:Kick("[Aegis] dood.. join tc2.. dm 1_aegis if this is bugged..")
+    game:GetService("Players").LocalPlayer:Kick("[Aegis] This script is for Typical Colors 2 only.")
     return
 end
 
@@ -183,17 +183,17 @@ local SkeletonConnections = {
 }
 
 local ProjectileWeapons = {
-    ["Direct Hit"]      = {Speed=123.75, Gravity=1,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Direct Hit"]      = {Speed=123.75, Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
     ["Maverick"]        = {Speed=64.75,  Gravity=15,   InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["Rocket Launcher"] = {Speed=64.75,  Gravity=1,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["Double Trouble"]  = {Speed=64.75,  Gravity=1,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["Blackbox"]        = {Speed=64.75,  Gravity=1,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["Original"]        = {Speed=64.75,  Gravity=1,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["Cow Mangler 5000"]= {Speed=64.75,  Gravity=1,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["Wreckers Yard"]   = {Speed=64.75,  Gravity=1,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["G-Bomb"]          = {Speed=44.6875,Gravity=1,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["Airstrike"]       = {Speed=64.75,  Gravity=1,    InitialAngle=0,    Lifetime=99,  Type="Rocket", AirSpeed=110},
-    ["Liberty Launcher"]= {Speed=96.25,  Gravity=1,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Rocket Launcher"] = {Speed=64.75,  Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Double Trouble"]  = {Speed=64.75,  Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Blackbox"]        = {Speed=68.75,  Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Original"]        = {Speed=68.75,  Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Cow Mangler 5000"]= {Speed=64.75,  Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Wreckers Yard"]   = {Speed=64.75,  Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["G-Bomb"]          = {Speed=44.6875,Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Airstrike"]       = {Speed=64.75,  Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket", AirSpeed=110},
+    ["Liberty Launcher"]= {Speed=96.25,  Gravity=2,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
     ["Grenade Launcher"]= {Speed=76,     Gravity=42.6, InitialAngle=7.92, Lifetime=0.8, Type="Grenade"},
     ["Ultimatum"]       = {Speed=76,     Gravity=42.6, InitialAngle=7.92, Lifetime=0.8, Type="Grenade"},
     ["Iron Bomber"]     = {Speed=76,     Gravity=42.6, InitialAngle=7.92, Lifetime=0.8, Type="Grenade"},
@@ -932,27 +932,31 @@ local function PredictProjectileHit(targetPart, player, weaponName)
     local char   = targetPart:FindFirstAncestorOfClass("Model")
     local hrp    = char and GetHRP(char); if not hrp then return targetPart.Position, 0 end
 
+    -- partOffset: the selected body part's position relative to HRP (e.g. Head is ~+1.5 Y).
+    -- Simulation always tracks HRP; we re-apply this offset at the end so the aim point
+    -- matches the selected part instead of always landing on the torso/HRP.
+    local partOffset = targetPart.Position - hrp.Position
+
     if IsVelocityStale(player) or GetPlayerVelocity(player).Magnitude < 0.5 then
-        local d = (hrp.Position - origin).Magnitude
-        return hrp.Position, d / speed
+        local d = (targetPart.Position - origin).Magnitude
+        return targetPart.Position, d / speed
     end
 
     local rp = GetSimRayParams()
-    local predictedPos = hrp.Position
+    local predictedHRP = hrp.Position
     local travelTime   = 0
 
-    local angleRad     = math.rad(initAngle)
-    local cosAngle     = math.cos(angleRad)
+    local angleRad  = math.rad(initAngle)
+    local cosAngle  = math.cos(angleRad)
 
     for _ = 1, 5 do
-        -- Correct travel time by accounting for initial angle in horizontal speed
-        local dx = predictedPos.X - origin.X; local dz = predictedPos.Z - origin.Z
+        local predictedPart  = predictedHRP + partOffset
+        local dx = predictedPart.X - origin.X; local dz = predictedPart.Z - origin.Z
         local horizontalDist = math.sqrt(dx*dx + dz*dz)
         if gravity == 0 and initAngle == 0 then
-            travelTime = (predictedPos - origin).Magnitude / speed
+            travelTime = (predictedPart - origin).Magnitude / speed
         else
-            local horizontalSpeed = speed * cosAngle
-            travelTime = horizontalDist / math.max(horizontalSpeed, 1)
+            travelTime = horizontalDist / math.max(speed * cosAngle, 1)
         end
         travelTime = math.min(travelTime, lifetime)
         if armTime and armTime > 0 then travelTime = math.max(travelTime, armTime) end
@@ -960,17 +964,19 @@ local function PredictProjectileHit(targetPart, player, weaponName)
         local totalTime = travelTime + ping * 2
         local simSteps  = math.clamp(math.floor(totalTime / 0.033), 5, 30)
         local simResult = SimulateTargetPosition(player, totalTime, simSteps, rp, true)
-        if simResult then predictedPos = simResult else return hrp.Position, travelTime end
+        if simResult then predictedHRP = simResult else return targetPart.Position, travelTime end
     end
+
+    local predictedPos = predictedHRP + partOffset
 
     local myHRP = GetHRP(GetLocalCharacter())
     if myHRP and (predictedPos - myHRP.Position).Magnitude < 3 then
-        return hrp.Position, (hrp.Position - origin).Magnitude / speed
+        return targetPart.Position, (targetPart.Position - origin).Magnitude / speed
     end
 
     if not CanProjectileHitPosition(origin, predictedPos, speed, gravity, initAngle, lifetime, weaponName) then
-        if CanProjectileHitPosition(origin, hrp.Position, speed, gravity, initAngle, lifetime, weaponName) then
-            return hrp.Position, (hrp.Position - origin).Magnitude / speed
+        if CanProjectileHitPosition(origin, targetPart.Position, speed, gravity, initAngle, lifetime, weaponName) then
+            return targetPart.Position, (targetPart.Position - origin).Magnitude / speed
         end
         return nil, 0
     end
@@ -1089,7 +1095,7 @@ end
 -- AIM ARMS
 -- Snaps/smooths to target for 0.5s, then returns to camera over 0.3s
 ------------------------------------------------------------
-local ARM_HOLD_TIME   = 0.3
+local ARM_HOLD_TIME   = 0.5
 local ARM_RETURN_TIME = 0.3
 
 local function AimArmsAt(targetPos)
@@ -1286,39 +1292,8 @@ task.spawn(function()
     end)
 end)
 
-------------------------------------------------------------
--- NAMECALL HOOK (remote detection only — no __index hook)
-------------------------------------------------------------
---[[
-do
-    local OldNamecall
-    OldNamecall = hookmetamethod(game, "__namecall", function(self2, ...)
-        local method = getnamecallmethod()
-        -- Short-circuit: only care about FireServer/InvokeServer
-        if method ~= "FireServer" and method ~= "InvokeServer" then return OldNamecall(self2, ...) end
-        if checkcaller() then return OldNamecall(self2, ...) end
+-- (namecall hook removed — no longer needed)
 
-        if not S.shootingRemoteFound and remoteSet[self2] then
-            local args = {...}
-            if #args >= 3 then
-                local wn; pcall(function()
-                    local c = Workspace:FindFirstChild(LocalPlayer.Name)
-                    if c then c = c:FindFirstChild("Gun"); if c then c = c:FindFirstChild("Boop"); if c then wn = c.Value end end end
-                end)
-                if wn and type(args[1])=="string" and string.find(args[1], wn, 1, true) and type(args[2])=="number" and type(args[3])=="number" then
-                    local rn = self2.Name; local prev = lastKnownAmmo[rn]; lastKnownAmmo[rn] = args[2]
-                    if prev and args[2] < prev then
-                        S.shootingRemoteFound = true; S.shootingRemote = self2; getgenv().ShootingRemote = self2
-                        Notify("Shooting remote found: " .. rn, 4)
-                    end
-                end
-            end
-        end
-
-        return OldNamecall(self2, ...)
-    end)
-end
-]]
 -- Wallbang: only hook __index when enabled, install/remove dynamically
 local wallbangHook = nil
 local function InstallWallbangHook()
@@ -2046,7 +2021,7 @@ end
 do
     local EL = Tabs.Exploits:AddLeftGroupbox("Exploits", "zap")
 
-    EL:AddLabel("⚠ Anti-Aim is obvious to other players"):AddKeyPicker("AAKeybind", { Default="None", Mode="Toggle", Text="Anti-Aim",
+    EL:AddLabel("skidded from AeGiS"):AddKeyPicker("AAKeybind", { Default="None", Mode="Toggle", Text="Anti-Aim",
         Callback=function(v) Config.AntiAim.Enabled = v end })
     EL:AddDropdown("AAMode", { Values={"jitter","backwards","spin"}, Default="jitter", Text="Mode",
         Callback=function(v) Config.AntiAim.Mode=v end })
@@ -2074,7 +2049,7 @@ do
         Callback=function(v) Config.NoSpread.Multiplier=v end })
     EL:AddDivider()
 
-    EL:AddLabel("⚠ Speed is obvious to other players")
+    EL:AddLabel("Obvious feature")
     EL:AddToggle("SpeedToggle", { Text="Speed", Default=false })
         :AddKeyPicker("SpeedKey", { Default="None", Mode="Toggle", Text="Speed", SyncToggleState=true })
     Toggles.SpeedToggle:OnChanged(function()
@@ -2093,7 +2068,7 @@ do
     AB:AddToggle("AutoBackstab",        { Text="Auto Backstab",    Default=false })
     AB:AddToggle("BackstabIgnoreInvis", { Text="Ignore Invisible", Default=true })
     AB:AddDivider()
-    AB:AddLabel("⚠ Auto Warp is obvious to other players")
+    AB:AddLabel("forgot to add freeze")
     AB:AddToggle("AutoWarp", { Text="Auto Warp Behind", Default=false })
     AB:AddLabel("Warp Key"):AddKeyPicker("WarpKey", { Default="None", Mode="Toggle", Text="Warp" })
 end
@@ -2463,6 +2438,60 @@ LogService.MessageOut:Connect(function(message)
 end)
 
 ------------------------------------------------------------
+-- MOD / STAFF DETECTOR
+-- Reads newTcPlayer attributes for each player.
+-- Fires a persistent notification if any staff attribute is true.
+-- Always active — no toggle.
+------------------------------------------------------------
+do
+    local STAFF_ATTRS = {
+        "IsGroupCoder", "IsGroupContributor", "IsGroupDeveloper",
+        "IsGroupMapper", "IsGroupModerator",  "IsGroupTester",
+    }
+    local alreadyNotified = {}
+
+    local function CheckPlayerForStaff(player)
+        if player == LocalPlayer then return end
+        local ntp = player:FindFirstChild("newTcPlayer"); if not ntp then return end
+        local found = {}
+        for _, attr in ipairs(STAFF_ATTRS) do
+            local val = ntp:GetAttribute(attr)
+            if val and val ~= false and val ~= 0 and val ~= "" then
+                table.insert(found, attr:gsub("IsGroup",""))
+            end
+        end
+        if #found > 0 then
+            local key   = player.UserId
+            local label = table.concat(found, "/")
+            if alreadyNotified[key] ~= label then
+                alreadyNotified[key] = label
+                Notify("hey buddy theres someone special in ur server: " .. player.Name .. " [" .. label .. "]", 10)
+            end
+        end
+    end
+
+    local function HookNTP(player)
+        local ntp = player:FindFirstChild("newTcPlayer"); if not ntp then return end
+        ntp.AttributeChanged:Connect(function() pcall(CheckPlayerForStaff, player) end)
+        pcall(CheckPlayerForStaff, player)
+    end
+
+    local function SetupPlayer(player)
+        task.spawn(function()
+            task.wait(2)
+            pcall(HookNTP, player)
+            player.ChildAdded:Connect(function(child)
+                if child.Name == "newTcPlayer" then task.wait(0.5); pcall(HookNTP, player) end
+            end)
+        end)
+    end
+
+    for _, p in ipairs(Players:GetPlayers()) do SetupPlayer(p) end
+    Players.PlayerAdded:Connect(SetupPlayer)
+    Players.PlayerRemoving:Connect(function(p) alreadyNotified[p.UserId] = nil end)
+end
+
+------------------------------------------------------------
 -- MAIN RENDER LOOP
 ------------------------------------------------------------
 local MainConnection = RunService.RenderStepped:Connect(function(dt)
@@ -2640,4 +2669,4 @@ Library:OnUnload(function()
     Library.Unloaded = true
 end)
 
-print("[Aegis loaded]")
+print("[Aegis] Loaded — TC2 PlaceId confirmed.")
