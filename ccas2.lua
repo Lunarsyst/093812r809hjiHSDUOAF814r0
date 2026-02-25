@@ -22,11 +22,94 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 Library.ForceCheckbox = false
 Library.ShowToggleFrameInKeybinds = true
 
+-- ══════════════════════════════════════
+-- PLATFORM DETECTION
+-- ══════════════════════════════════════
+local function isMobile()
+	local success, result = pcall(function()
+		return UIS.TouchEnabled and not UIS.KeyboardEnabled
+	end)
+	return success and result
+end
+
+local IS_MOBILE = isMobile()
+
+-- ══════════════════════════════════════
+-- MOBILE TOGGLE BUTTON
+-- ══════════════════════════════════════
+local function createMobileToggle()
+	if not IS_MOBILE then return end
+
+	local toggleGui = Instance.new("ScreenGui")
+	toggleGui.Name = "AegisMobileToggle"
+	toggleGui.ResetOnSpawn = false
+	toggleGui.DisplayOrder = 999999
+
+	pcall(function() toggleGui.Parent = game:GetService("CoreGui") end)
+	if not toggleGui.Parent then
+		toggleGui.Parent = PlayerGui
+	end
+
+	local toggleBtn = Instance.new("ImageButton")
+	toggleBtn.Name = "MenuToggle"
+	toggleBtn.Size = UDim2.new(0, 50, 0, 50)
+	toggleBtn.Position = UDim2.new(0, 10, 0, 200)
+	toggleBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	toggleBtn.BackgroundTransparency = 0.3
+	toggleBtn.Image = "rbxassetid://7733960981"
+	toggleBtn.Parent = toggleGui
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 12)
+	corner.Parent = toggleBtn
+
+	local dragging = false
+	local dragStart, startPos
+
+	toggleBtn.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = toggleBtn.Position
+		end
+	end)
+
+	toggleBtn.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.Touch and dragging then
+			local delta = input.Position - dragStart
+			toggleBtn.Position = UDim2.new(
+				startPos.X.Scale,
+				startPos.X.Offset + delta.X,
+				startPos.Y.Scale,
+				startPos.Y.Offset + delta.Y
+			)
+		end
+	end)
+
+	toggleBtn.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.Touch then
+			if dragging then
+				local delta = input.Position - dragStart
+				if delta.Magnitude < 10 then
+					Library:ToggleMenu()
+				end
+				dragging = false
+			end
+		end
+	end)
+
+	Library:OnUnload(function()
+		if toggleGui then toggleGui:Destroy() end
+	end)
+
+	return toggleGui
+end
+
 local Window = Library:CreateWindow({
 	Title = "Aegisaken",
 	Footer = "[ discord.gg/axu9dZypbb ]",
 	NotifySide = "Right",
-	ShowCustomCursor = true,
+	ShowCustomCursor = not IS_MOBILE,
 })
 
 local Tabs = {
@@ -65,32 +148,208 @@ local function getRootPart(character)
 	return character and character:FindFirstChild("HumanoidRootPart")
 end
 
+-- ══════════════════════════════════════
+-- MULTI-FALLBACK CLICK FUNCTION
+-- ══════════════════════════════════════
 local function click(btnName)
 	local ui = PlayerGui:FindFirstChild("MainUI")
 	local btn = ui and ui:FindFirstChild("AbilityContainer") and ui.AbilityContainer:FindFirstChild(btnName)
 	if not btn then return end
-	for _, c in ipairs(getconnections(btn.MouseButton1Click)) do pcall(function() c:Fire() end) end
-	pcall(function() btn:Activate() end)
+
+	local fired = false
+
+	if not fired and getconnections then
+		pcall(function()
+			for _, c in ipairs(getconnections(btn.MouseButton1Click)) do
+				c:Fire()
+				fired = true
+			end
+		end)
+	end
+
+	if not fired and firesignal then
+		pcall(function()
+			firesignal(btn.MouseButton1Click)
+			fired = true
+		end)
+	end
+
+	if not fired and fireclick then
+		pcall(function()
+			fireclick(btn)
+			fired = true
+		end)
+	end
+
+	if not fired then
+		pcall(function()
+			btn:Activate()
+			fired = true
+		end)
+	end
+
+	if not fired then
+		pcall(function()
+			local absPos = btn.AbsolutePosition
+			local absSize = btn.AbsoluteSize
+			local center = absPos + absSize / 2
+			VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, true, game, 0)
+			task.wait(0.05)
+			VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, false, game, 0)
+		end)
+	end
+end
+
+-- ══════════════════════════════════════
+-- MOBILE-COMPATIBLE INPUT FUNCTIONS
+-- ══════════════════════════════════════
+local function getButtonFromKeyCode(keyCode)
+	local mainUI = PlayerGui:FindFirstChild("MainUI")
+	if not mainUI then return nil end
+
+	local keyToButton = {
+		[Enum.KeyCode.F] = function()
+			local interact = mainUI:FindFirstChild("InteractButton")
+				or mainUI:FindFirstChild("ActionButton")
+				or mainUI:FindFirstChild("PromptButton")
+			if interact then return interact end
+			for _, desc in ipairs(mainUI:GetDescendants()) do
+				if desc:IsA("TextButton") or desc:IsA("ImageButton") then
+					if desc.Name:lower():find("interact")
+						or desc.Name:lower():find("action")
+						or desc.Name:lower():find("prompt")
+						or desc.Name:lower():find("repair") then
+						return desc
+					end
+				end
+			end
+			return nil
+		end,
+
+		[Enum.KeyCode.LeftShift] = function()
+			local sprint = mainUI:FindFirstChild("SprintingButton")
+				or mainUI:FindFirstChild("SprintButton")
+			if sprint then return sprint end
+			for _, desc in ipairs(mainUI:GetDescendants()) do
+				if desc:IsA("TextButton") or desc:IsA("ImageButton") then
+					if desc.Name:lower():find("sprint")
+						or desc.Name:lower():find("run") then
+						return desc
+					end
+				end
+			end
+			return nil
+		end,
+
+		[Enum.KeyCode.Q] = function()
+			local ability = mainUI:FindFirstChild("AbilityContainer")
+			if ability then
+				local btn = ability:FindFirstChild("Ability1") or ability:FindFirstChild("Q")
+				if btn then return btn end
+			end
+			return nil
+		end,
+
+		[Enum.KeyCode.E] = function()
+			local ability = mainUI:FindFirstChild("AbilityContainer")
+			if ability then
+				local btn = ability:FindFirstChild("Ability2") or ability:FindFirstChild("E")
+				if btn then return btn end
+			end
+			return nil
+		end,
+
+		[Enum.KeyCode.R] = function()
+			local ability = mainUI:FindFirstChild("AbilityContainer")
+			if ability then
+				local btn = ability:FindFirstChild("Ability3") or ability:FindFirstChild("R")
+				if btn then return btn end
+			end
+			return nil
+		end,
+	}
+
+	local finder = keyToButton[keyCode]
+	if finder then return finder() end
+	return nil
+end
+
+local function fireButton(btn)
+	if not btn then return false end
+
+	pcall(function()
+		if getconnections then
+			for _, conn in ipairs(getconnections(btn.MouseButton1Click)) do
+				conn:Fire()
+			end
+		end
+	end)
+
+	pcall(function()
+		if firesignal then
+			firesignal(btn.MouseButton1Click)
+		end
+	end)
+
+	pcall(function()
+		if fireclick then
+			fireclick(btn)
+		end
+	end)
+
+	pcall(function()
+		btn:Activate()
+	end)
+
+	pcall(function()
+		local pos = btn.AbsolutePosition + btn.AbsoluteSize / 2
+		VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 0)
+		task.wait(0.05)
+		VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 0)
+	end)
+
+	return true
 end
 
 local function pressKey(keyCode)
-	VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+	if IS_MOBILE then
+		local btn = getButtonFromKeyCode(keyCode)
+		if btn then fireButton(btn) end
+	else
+		VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+	end
 end
 
 local function releaseKey(keyCode)
-	VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+	if IS_MOBILE then
+		-- Mobile buttons are typically toggles, release is handled differently
+		return
+	else
+		VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+	end
 end
 
 local function holdKey(keyCode, duration)
-	pressKey(keyCode)
-	task.wait(duration)
-	releaseKey(keyCode)
+	if IS_MOBILE then
+		local btn = getButtonFromKeyCode(keyCode)
+		if btn then fireButton(btn) end
+		task.wait(duration)
+	else
+		VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+		task.wait(duration)
+		VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+	end
 end
 
 local function tapKey(keyCode)
-	pressKey(keyCode)
-	task.wait(0.05)
-	releaseKey(keyCode)
+	if IS_MOBILE then
+		local btn = getButtonFromKeyCode(keyCode)
+		if btn then fireButton(btn) end
+	else
+		VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+		task.wait(0.05)
+		VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+	end
 end
 
 local KillersFolder = workspace:WaitForChild("Players"):WaitForChild("Killers")
@@ -287,7 +546,7 @@ local function visualizePath(waypoints)
 end
 
 -- ══════════════════════════════════════
--- SPRINT MANAGER
+-- SPRINT MANAGER (MOBILE COMPATIBLE)
 -- ══════════════════════════════════════
 local sprintRunning = false
 local sprintInfStamina = false
@@ -295,6 +554,7 @@ local sprintHoldTime = 8
 local sprintRestTime = 10
 local sprintRestTimeInf = 0.5
 local sprintCoroutine = nil
+local mobileSprintActive = false
 
 local function startSprintLoop()
 	if sprintCoroutine then return end
@@ -302,34 +562,85 @@ local function startSprintLoop()
 		while sprintRunning do
 			if Library.Unloaded then break end
 			if not (Toggles.Autofarm and Toggles.Autofarm.Value) then
-				releaseKey(Enum.KeyCode.LeftShift)
+				if IS_MOBILE then
+					if mobileSprintActive then
+						local btn = getButtonFromKeyCode(Enum.KeyCode.LeftShift)
+						if btn then fireButton(btn) end
+						mobileSprintActive = false
+					end
+				else
+					releaseKey(Enum.KeyCode.LeftShift)
+				end
 				task.wait(0.2)
 				continue
 			end
-			pressKey(Enum.KeyCode.LeftShift)
-			local elapsed = 0
-			while elapsed < sprintHoldTime and sprintRunning and Toggles.Autofarm.Value do
-				if Library.Unloaded then break end
-				task.wait(0.1)
-				elapsed = elapsed + 0.1
-			end
-			releaseKey(Enum.KeyCode.LeftShift)
-			local restDuration = sprintInfStamina and sprintRestTimeInf or sprintRestTime
-			elapsed = 0
-			while elapsed < restDuration and sprintRunning do
-				if Library.Unloaded then break end
-				task.wait(0.1)
-				elapsed = elapsed + 0.1
+
+			if IS_MOBILE then
+				if not mobileSprintActive then
+					local btn = getButtonFromKeyCode(Enum.KeyCode.LeftShift)
+					if btn then
+						fireButton(btn)
+						mobileSprintActive = true
+					end
+				end
+
+				local elapsed = 0
+				while elapsed < sprintHoldTime and sprintRunning and Toggles.Autofarm.Value do
+					if Library.Unloaded then break end
+					task.wait(0.1)
+					elapsed = elapsed + 0.1
+				end
+
+				local btn = getButtonFromKeyCode(Enum.KeyCode.LeftShift)
+				if btn then fireButton(btn) end
+				mobileSprintActive = false
+
+				local restDuration = sprintInfStamina and sprintRestTimeInf or sprintRestTime
+				elapsed = 0
+				while elapsed < restDuration and sprintRunning do
+					if Library.Unloaded then break end
+					task.wait(0.1)
+					elapsed = elapsed + 0.1
+				end
+			else
+				pressKey(Enum.KeyCode.LeftShift)
+				local elapsed = 0
+				while elapsed < sprintHoldTime and sprintRunning and Toggles.Autofarm.Value do
+					if Library.Unloaded then break end
+					task.wait(0.1)
+					elapsed = elapsed + 0.1
+				end
+				releaseKey(Enum.KeyCode.LeftShift)
+				local restDuration = sprintInfStamina and sprintRestTimeInf or sprintRestTime
+				elapsed = 0
+				while elapsed < restDuration and sprintRunning do
+					if Library.Unloaded then break end
+					task.wait(0.1)
+					elapsed = elapsed + 0.1
+				end
 			end
 		end
-		releaseKey(Enum.KeyCode.LeftShift)
+
+		if IS_MOBILE and mobileSprintActive then
+			local btn = getButtonFromKeyCode(Enum.KeyCode.LeftShift)
+			if btn then fireButton(btn) end
+			mobileSprintActive = false
+		else
+			releaseKey(Enum.KeyCode.LeftShift)
+		end
 		sprintCoroutine = nil
 	end)
 end
 
 local function stopSprintLoop()
 	sprintRunning = false
-	releaseKey(Enum.KeyCode.LeftShift)
+	if IS_MOBILE and mobileSprintActive then
+		local btn = getButtonFromKeyCode(Enum.KeyCode.LeftShift)
+		if btn then fireButton(btn) end
+		mobileSprintActive = false
+	else
+		releaseKey(Enum.KeyCode.LeftShift)
+	end
 	sprintCoroutine = nil
 end
 
@@ -395,9 +706,10 @@ local function serverHop()
 end
 
 -- ══════════════════════════════════════
--- GENERATOR / GINGERBREAD DETECTION
+-- GENERATOR / GINGERBREAD DETECTION (FIXED)
 -- ══════════════════════════════════════
-local collectedGingerbreads = {} -- blacklist for gingerbreads we already walked through
+local collectedGingerbreads = {}
+local completedGenerators = {} -- FIXED: Track generators we've already completed or attempted
 
 local function getCurrencyLocations()
 	local results = {}
@@ -413,10 +725,15 @@ local function getCurrencyLocations()
 end
 
 local function getGeneratorProgress(gen)
+	-- FIXED: Check multiple possible progress sources
+
+	-- Method 1: Direct child named "Progress"
 	local progressChild = gen:FindFirstChild("Progress")
 	if progressChild and progressChild:IsA("ValueBase") then
 		return progressChild.Value
 	end
+
+	-- Method 2: Attribute named "Progress"
 	local attrProgress = nil
 	pcall(function()
 		attrProgress = gen:GetAttribute("Progress")
@@ -424,27 +741,56 @@ local function getGeneratorProgress(gen)
 	if type(attrProgress) == "number" then
 		return attrProgress
 	end
+
+	-- Method 3: Check for progress bar UI inside the generator
+	local progressBar = nil
+	pcall(function()
+		for _, desc in ipairs(gen:GetDescendants()) do
+			if desc.Name:lower():find("progress") and desc:IsA("ValueBase") then
+				progressBar = desc.Value
+				break
+			end
+		end
+	end)
+	if type(progressBar) == "number" then
+		return progressBar
+	end
+
+	-- Method 4: Check if generator has visual indicators of completion
+	-- (e.g., lights on, particles active, etc.)
+	local isComplete = false
+	pcall(function()
+		-- Some games use a "Completed" or "Done" attribute
+		isComplete = gen:GetAttribute("Completed") == true
+			or gen:GetAttribute("Done") == true
+			or gen:GetAttribute("IsComplete") == true
+			or gen:GetAttribute("Finished") == true
+	end)
+	if isComplete then
+		return 100
+	end
+
+	-- Method 5: Check Remotes folder for state
+	pcall(function()
+		local remotes = gen:FindFirstChild("Remotes")
+		if remotes then
+			local state = remotes:FindFirstChild("State")
+			if state and state:IsA("ValueBase") then
+				if tostring(state.Value):lower() == "completed"
+					or tostring(state.Value):lower() == "done" then
+					return 100
+				end
+			end
+		end
+	end)
+
 	return 0
 end
 
 local function isGeneratorDone(gen)
+	-- FIXED: Also check our completed list
+	if completedGenerators[gen] then return true end
 	return getGeneratorProgress(gen) >= 100
-end
-
--- Track generator enter/leave state via remotes
-local generatorEntered = {} -- [generator] = true/false
-
-local function hookGeneratorRemotes(genModel)
-	pcall(function()
-		local remotesFolder = genModel:FindFirstChild("Remotes")
-		if not remotesFolder then return end
-		local rf = remotesFolder:FindFirstChild("RF")
-		if not rf then return end
-
-		-- We can't easily hook RemoteFunction calls from client side,
-		-- but we can monitor if Enter/Leave children exist
-		-- Instead, we'll track proximity + F holding as our enter/leave detection
-	end)
 end
 
 local function getAllGeneratorModels()
@@ -468,8 +814,8 @@ end
 local function getGenerators()
 	local gens = {}
 	for _, gen in ipairs(getAllGeneratorModels()) do
-		local progress = getGeneratorProgress(gen)
-		if progress < 100 then
+		-- FIXED: Check both progress AND our completed list
+		if not completedGenerators[gen] and not isGeneratorDone(gen) then
 			table.insert(gens, gen)
 		end
 	end
@@ -529,20 +875,56 @@ local function getTargetTypeName(target)
 end
 
 -- ══════════════════════════════════════
--- F HOLD MANAGEMENT
+-- F HOLD MANAGEMENT (MOBILE COMPATIBLE)
 -- ══════════════════════════════════════
 local holdingF = false
+local mobileHoldingF = false
+local mobileHoldFLoop = nil
 
 local function startHoldingF()
 	if holdingF then return end
 	holdingF = true
-	pressKey(Enum.KeyCode.F)
+
+	if IS_MOBILE then
+		mobileHoldingF = true
+		if not mobileHoldFLoop then
+			mobileHoldFLoop = task.spawn(function()
+				while mobileHoldingF do
+					if Library.Unloaded then break end
+					local btn = getButtonFromKeyCode(Enum.KeyCode.F)
+					if btn then
+						pcall(function()
+							local pos = btn.AbsolutePosition + btn.AbsoluteSize / 2
+							VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 0)
+						end)
+						fireButton(btn)
+					end
+					task.wait(0.15)
+				end
+				pcall(function()
+					local btn = getButtonFromKeyCode(Enum.KeyCode.F)
+					if btn then
+						local pos = btn.AbsolutePosition + btn.AbsoluteSize / 2
+						VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 0)
+					end
+				end)
+				mobileHoldFLoop = nil
+			end)
+		end
+	else
+		pressKey(Enum.KeyCode.F)
+	end
 end
 
 local function stopHoldingF()
 	if not holdingF then return end
 	holdingF = false
-	releaseKey(Enum.KeyCode.F)
+
+	if IS_MOBILE then
+		mobileHoldingF = false
+	else
+		releaseKey(Enum.KeyCode.F)
+	end
 end
 
 -- ══════════════════════════════════════
@@ -557,14 +939,13 @@ local function teleportToTarget(target)
 	local targetPos = getTargetPosition(target)
 	if not targetPos then return false end
 
-	-- Teleport slightly above the target to avoid clipping
 	rootPart.CFrame = CFrame.new(targetPos + Vector3.new(0, 3, 0))
 	task.wait(0.3)
 	return true
 end
 
 -- ══════════════════════════════════════
--- PATHFINDING (fewer waypoints for running)
+-- PATHFINDING
 -- ══════════════════════════════════════
 local autofarmActive = false
 local blacklistedTargets = {}
@@ -583,7 +964,6 @@ local function pathfindTo(target)
 
 	if (rootPart.Position - targetPos).Magnitude > 2000 then return false end
 
-	-- For gingerbread: if already close, just walk through
 	if isTargetGingerbread(target) then
 		local dist = (rootPart.Position - targetPos).Magnitude
 		if dist <= 8 then
@@ -599,7 +979,7 @@ local function pathfindTo(target)
 		AgentHeight = 5,
 		AgentCanJump = true,
 		AgentCanClimb = false,
-		WaypointSpacing = 12, -- INCREASED from 4 to 12 so running actually works between points
+		WaypointSpacing = 12,
 	})
 
 	local success, err = pcall(function()
@@ -623,7 +1003,6 @@ local function pathfindTo(target)
 				if conn and conn.Connected then conn:Disconnect() end
 				return false
 			end
-			-- Gingerbread: walk through check
 			if isTargetGingerbread(target) and getDistanceToTarget(target) <= 4 then
 				if conn and conn.Connected then conn:Disconnect() end
 				collectedGingerbreads[target] = true
@@ -691,7 +1070,6 @@ local function pathfindTo(target)
 				clearPathVisualizer()
 				return false
 			end
-			-- Gingerbread: if close enough, mark collected and move on
 			if isTargetGingerbread(target) and getDistanceToTarget(target) <= 4 then
 				if conn and conn.Connected then conn:Disconnect() end
 				clearPathVisualizer()
@@ -710,7 +1088,6 @@ local function pathfindTo(target)
 
 	clearPathVisualizer()
 
-	-- Mark gingerbread as collected
 	if isTargetGingerbread(target) then
 		collectedGingerbreads[target] = true
 	end
@@ -719,25 +1096,20 @@ local function pathfindTo(target)
 end
 
 -- ══════════════════════════════════════
--- GENERATOR INTERACTION WITH REMOTE MONITORING
+-- GENERATOR INTERACTION (FIXED - Returns status)
 -- ══════════════════════════════════════
-local function getGeneratorRemoteProgress(genModel)
-	-- Try to read progress from the generator's Remotes/RE
-	local progress = getGeneratorProgress(genModel)
-	return progress
-end
-
 local function doGeneratorInteraction(target)
 	setDebugStatus("Doing generator..", getTargetTypeName(target))
 
-	-- Initial check
 	local initialProgress = getGeneratorProgress(target)
 	setDebugProgress("Progress: " .. tostring(math.floor(initialProgress)))
 
-	if initialProgress >= 100 then
+	-- FIXED: Double-check before starting
+	if initialProgress >= 100 or completedGenerators[target] then
 		setDebugProgress("")
 		setDebugStatus("Generator already done, skipping..")
-		return
+		completedGenerators[target] = true
+		return "already_done"
 	end
 
 	local baseTimeout = 12
@@ -745,6 +1117,7 @@ local function doGeneratorInteraction(target)
 	local lastProgressTime = tick()
 	local interactionStartTime = tick()
 	local firstCheckDone = false
+	local progressEverIncreased = false -- FIXED: Track if we ever saw progress
 
 	startHoldingF()
 
@@ -753,21 +1126,17 @@ local function doGeneratorInteraction(target)
 
 		local dist = getDistanceToTarget(target)
 
-		-- If too far, stop
 		if dist > 12 then
 			setDebugStatus("Too far from generator, stopping..")
 			break
 		end
 
-		-- Keep holding F if close
 		if dist <= 8 then
 			startHoldingF()
 		else
 			stopHoldingF()
 		end
 
-		-- Wait 2-3 seconds after starting before first progress check
-		-- (puzzle completion takes a moment to register)
 		local elapsed = tick() - interactionStartTime
 
 		if elapsed >= 3 and not firstCheckDone then
@@ -777,36 +1146,36 @@ local function doGeneratorInteraction(target)
 			if currentProgress > lastProgress then
 				lastProgress = currentProgress
 				lastProgressTime = tick()
+				progressEverIncreased = true
 				setDebugStatus("Generator progress increasing..", getTargetTypeName(target))
 			end
 		end
 
-		-- Check progress every second after initial wait
 		if firstCheckDone then
 			local currentProgress = getGeneratorProgress(target)
 			setDebugProgress("Progress: " .. tostring(math.floor(currentProgress)))
 
-			-- Done!
 			if currentProgress >= 100 then
 				setDebugStatus("Generator complete!", getTargetTypeName(target))
-				break
+				stopHoldingF()
+				setDebugProgress("")
+				completedGenerators[target] = true -- FIXED: Mark as completed
+				return "completed"
 			end
 
 			if currentProgress > lastProgress then
-				-- Progress going up, extend timer by 10 seconds
 				lastProgress = currentProgress
 				lastProgressTime = tick()
+				progressEverIncreased = true
 				setDebugStatus("Generator progress increasing..", getTargetTypeName(target))
 			end
 
-			-- Timeout from last progress change
 			local timeSinceProgress = tick() - lastProgressTime
 			if timeSinceProgress > baseTimeout then
 				setDebugStatus("Generator timeout, moving on..", getTargetTypeName(target))
 				break
 			end
 		else
-			-- Before first check, still enforce a maximum wait
 			if elapsed > 15 then
 				setDebugStatus("Generator initial timeout..")
 				break
@@ -818,21 +1187,35 @@ local function doGeneratorInteraction(target)
 
 	stopHoldingF()
 	setDebugProgress("")
+
+	-- FIXED: Determine why we stopped and return appropriate status
+	local finalProgress = getGeneratorProgress(target)
+	if finalProgress >= 100 then
+		completedGenerators[target] = true
+		return "completed"
+	elseif not progressEverIncreased then
+		-- Progress never moved - likely already done or can't interact
+		-- Mark as completed to avoid getting stuck
+		completedGenerators[target] = true
+		return "no_progress"
+	else
+		-- Had some progress but timed out - might be interrupted by killer
+		-- Don't permanently mark, but temporarily blacklist
+		return "timeout"
+	end
 end
 
 -- ══════════════════════════════════════
--- GINGERBREAD INTERACTION (just walk through)
+-- GINGERBREAD INTERACTION
 -- ══════════════════════════════════════
 local function doGingerbreadInteraction(target)
 	setDebugStatus("Grabbing gingerbread..", getTargetTypeName(target))
-	-- Just walk to exact position
 	local character = getCharacter()
 	local humanoid = getHumanoid(character)
 	local targetPos = getTargetPosition(target)
 
 	if humanoid and targetPos then
 		humanoid:MoveTo(targetPos)
-		-- Wait briefly but don't stall
 		local startTime = tick()
 		while tick() - startTime < 1.5 do
 			if getDistanceToTarget(target) <= 3 then break end
@@ -841,7 +1224,6 @@ local function doGingerbreadInteraction(target)
 		end
 	end
 
-	-- Mark as collected regardless
 	collectedGingerbreads[target] = true
 end
 
@@ -980,7 +1362,7 @@ task.spawn(function()
 	end
 end)
 
--- Clean up collected gingerbreads that got removed from workspace
+-- Clean up collected gingerbreads
 task.spawn(function()
 	while true do
 		task.wait(5)
@@ -994,7 +1376,7 @@ task.spawn(function()
 end)
 
 -- ══════════════════════════════════════
--- AUTOFARM MAIN LOOP
+-- AUTOFARM MAIN LOOP (FIXED)
 -- ══════════════════════════════════════
 task.spawn(function()
 	while true do
@@ -1012,6 +1394,7 @@ task.spawn(function()
 				autofarmStartTime = tick()
 				foundFirstTarget = false
 				collectedGingerbreads = {}
+				completedGenerators = {} -- FIXED: Reset completed generators on fresh start
 			end
 
 			local movementMode = Options.AutofarmMovement and Options.AutofarmMovement.Value or "Pathfind"
@@ -1037,7 +1420,6 @@ task.spawn(function()
 					return filtered
 				end
 
-				-- Check generator progress before selecting
 				if mode == "Generators" or mode == "Both (Generators Priority)" then
 					setDebugStatus("Checking progress on closest generator..")
 					local allGens = getGenerators()
@@ -1079,6 +1461,14 @@ task.spawn(function()
 					local targetType = getTargetTypeName(target)
 					local isGinger = isTargetGingerbread(target)
 
+					-- FIXED: Pre-check generator before travelling
+					if not isGinger and isGeneratorDone(target) then
+						setDebugStatus("Generator already done, skipping..", targetType)
+						completedGenerators[target] = true
+						autofarmActive = false
+						continue
+					end
+
 					if isGinger then
 						setDebugStatus("Travelling to gingerbread..", targetType)
 					else
@@ -1099,18 +1489,36 @@ task.spawn(function()
 
 					if reachedTarget and Toggles.Autofarm and Toggles.Autofarm.Value then
 						if isGinger then
-							-- Gingerbread: already collected by walking through / teleporting
-							-- No F tap needed, just mark and move on
 							if not collectedGingerbreads[target] then
 								collectedGingerbreads[target] = true
 							end
 							setDebugStatus("Gingerbread collected!", targetType)
 						else
-							-- Generator: stop pathfinding, stay and do the generator
+							-- FIXED: Check again right before interacting
 							if not isGeneratorDone(target) then
-								doGeneratorInteraction(target)
+								local result = doGeneratorInteraction(target)
+
+								-- FIXED: Handle all possible results
+								if result == "completed" then
+									setDebugStatus("Generator completed!", targetType)
+									completedGenerators[target] = true
+								elseif result == "already_done" then
+									setDebugStatus("Generator was already done", targetType)
+									completedGenerators[target] = true
+								elseif result == "no_progress" then
+									setDebugStatus("No progress detected, marking done", targetType)
+									completedGenerators[target] = true
+								elseif result == "timeout" then
+									-- Timed out with some progress - temporarily blacklist
+									setDebugStatus("Generator timed out, temporarily skipping", targetType)
+									blacklistedTargets[target] = true
+									task.delay(30, function()
+										blacklistedTargets[target] = nil
+									end)
+								end
 							else
 								setDebugStatus("Generator already done, skipping..")
+								completedGenerators[target] = true
 							end
 						end
 					elseif not reachedTarget then
@@ -1153,6 +1561,7 @@ task.spawn(function()
 				autofarmStartTime = 0
 				foundFirstTarget = false
 				collectedGingerbreads = {}
+				completedGenerators = {} -- FIXED: Clear on disable
 				setDebugStatus("Idle")
 				setDebugProgress("")
 			end
@@ -1171,6 +1580,7 @@ Toggles.Autofarm:OnChanged(function()
 		autofarmStartTime = 0
 		foundFirstTarget = false
 		collectedGingerbreads = {}
+		completedGenerators = {} -- FIXED: Clear on toggle off
 		setDebugStatus("Idle")
 		setDebugProgress("")
 	end
@@ -1324,6 +1734,13 @@ local AttackAnimations = {
 	"rbxassetid://121808371053483","rbxassetid://106538427162796","rbxassetid://88451353906104"
 }
 
+-- Convert AttackAnimations to HashMap for O(1) lookup
+local AttackAnimationSet = {}
+for _, id in ipairs(AttackAnimations) do
+	local numId = id:match("%d+")
+	if numId then AttackAnimationSet[numId] = true end
+end
+
 local autoBlockOn = false
 local autoBlockAudioOn = false
 local detectionRange = 12
@@ -1460,7 +1877,7 @@ RunService.RenderStepped:Connect(function()
 			if animator then
 				for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
 					local animId = tostring(track.Animation.AnimationId):match("%d+")
-					if animId and table.find(AttackAnimations, animId) then
+					if animId and AttackAnimationSet[animId] then
 						if not facingCheckEnabled or isFacing(myRoot, hrp) then
 							task.wait(blockdelay)
 							click("Block")
@@ -1659,7 +2076,14 @@ do
 			local cur = isPlayer()
 			if prev ~= cur and cur then
 				local ok, btn = pcall(getSprintingButton)
-				if ok and btn then for _, v in pairs(getconnections(btn.MouseButton1Down)) do pcall(v.Fire, v) end end
+				if ok and btn then
+					pcall(function()
+						if getconnections then
+							for _, v in pairs(getconnections(btn.MouseButton1Down)) do pcall(v.Fire, v) end
+						end
+					end)
+					pcall(function() fireButton(btn) end)
+				end
 			end
 			prev = cur
 		end
@@ -1793,7 +2217,17 @@ AntiGroup:AddToggle("Anti1x", {
 		_G.no1x = state
 		if anti1xConn then anti1xConn:Disconnect() anti1xConn = nil end
 		if not state then return end
-		local function handlePopup(p) task.wait(0.3) if firesignal and p and p:IsA("ImageButton") then pcall(function() firesignal(p.MouseButton1Click) end) end end
+		local function handlePopup(p)
+			task.wait(0.3)
+			if p and p:IsA("ImageButton") then
+				pcall(function()
+					if firesignal then
+						firesignal(p.MouseButton1Click)
+					end
+				end)
+				pcall(function() fireButton(p) end)
+			end
+		end
 		local function scan(gui) if gui.Name ~= "TemporaryUI" then return end local p = gui:FindFirstChild("1x1x1x1Popup") if p then handlePopup(p) end gui.ChildAdded:Connect(function(c) if c.Name == "1x1x1x1Popup" then handlePopup(c) end end) end
 		for _, ui in ipairs(LocalPlayer.PlayerGui:GetChildren()) do scan(ui) end
 		anti1xConn = LocalPlayer.PlayerGui.ChildAdded:Connect(scan)
@@ -1811,7 +2245,7 @@ AntiGroup:AddToggle("AntiSubspace", { Text = "Subspace", Default = false, Callba
 local MenuGroup = Tabs["UI Settings"]:AddLeftGroupbox("Menu", "wrench")
 
 MenuGroup:AddToggle("KeybindMenuOpen", { Default = Library.KeybindFrame.Visible, Text = "Open Keybind Menu", Callback = function(v) Library.KeybindFrame.Visible = v end })
-MenuGroup:AddToggle("ShowCustomCursor", { Text = "Custom Cursor", Default = true, Callback = function(v) Library.ShowCustomCursor = v end })
+MenuGroup:AddToggle("ShowCustomCursor", { Text = "Custom Cursor", Default = not IS_MOBILE, Callback = function(v) Library.ShowCustomCursor = v end })
 MenuGroup:AddDropdown("NotificationSide", { Values = {"Left","Right"}, Default = "Right", Text = "Notification Side", Callback = function(v) Library:SetNotifySide(v) end })
 MenuGroup:AddDivider()
 MenuGroup:AddLabel("Menu bind"):AddKeyPicker("MenuKeybind", { Default = "RightShift", NoUI = true, Text = "Menu keybind" })
@@ -1826,8 +2260,10 @@ Library:OnUnload(function()
 	stopSprintLoop()
 	stopAutoAbility()
 	stopHoldingF()
-	releaseKey(Enum.KeyCode.F)
-	releaseKey(Enum.KeyCode.LeftShift)
+	if not IS_MOBILE then
+		releaseKey(Enum.KeyCode.F)
+		releaseKey(Enum.KeyCode.LeftShift)
+	end
 	if debugGui then debugGui:Destroy() end
 	Lighting.Ambient = oldAmbient
 	Lighting.OutdoorAmbient = oldOutdoor
@@ -1847,4 +2283,8 @@ SaveManager:BuildConfigSection(Tabs["UI Settings"])
 ThemeManager:ApplyToTab(Tabs["UI Settings"])
 SaveManager:LoadAutoloadConfig()
 
-Library:Notify("Aegis loaded successfully!", 5)
+-- Create mobile toggle button after everything is loaded
+createMobileToggle()
+
+local platformText = IS_MOBILE and " (Mobile Mode)" or " (PC Mode)"
+Library:Notify("Aegis loaded successfully!" .. platformText, 5)
