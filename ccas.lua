@@ -1003,7 +1003,7 @@ local function PredictProjectileHit(targetPart, player, weaponName)
         travelTime = math.min(travelTime, lifetime)
         if armTime and armTime > 0 then travelTime = math.max(travelTime, armTime) end
 
-        local totalTime = travelTime + ping * 2.15   -- 1 round-trip
+        local totalTime = travelTime + ping * 2.5   -- 1 round-trip
         local simSteps  = math.clamp(math.floor(totalTime / 0.033), 5, 30)
         local simResult = SimulateTargetPosition(player, totalTime, simSteps, rp, true)
         if simResult then predictedHRP = simResult else return targetPart.Position, travelTime end
