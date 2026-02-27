@@ -5,7 +5,7 @@
 -- PLACE CHECK
 ------------------------------------------------------------
 if game.PlaceId ~= 328028363 then
-    game:GetService("Players").LocalPlayer:Kick("[Aegis] This script is for Typical Colors 2 only.")
+    game:GetService("Players").LocalPlayer:Kick("You havent been permanently banned from the game. Reason: because i say so :D")
     return
 end
 
