@@ -1,15 +1,45 @@
--- Aegis | Typical Colors 2
--- Obsidian UI Library
-
 ------------------------------------------------------------
 -- PLACE CHECK
 ------------------------------------------------------------
 if game.PlaceId ~= 328028363 then
-    game:GetService("Players").LocalPlayer:Kick("[Aegis] wrong place pal")
+    game:GetService("Players").LocalPlayer:Kick("[Aegis] join tc2 jittleyang")
     return
 end
 
 if setthreadidentity then setthreadidentity(8) end
+
+------------------------------------------------------------
+-- ANTICHEAT BYPASS (blocks NewLoader before anything loads)
+------------------------------------------------------------
+do
+    local _RS  = game:GetService("RunService")
+    local _Rep = game:GetService("ReplicatedStorage")
+    local _LP  = game:GetService("Players").LocalPlayer or game:GetService("Players").PlayerAdded:Wait()
+    -- Wait for TC2 to finish server setup before hooking
+    repeat _RS.Heartbeat:Wait()
+    until _Rep:GetAttribute("sv_setup") and _LP:GetAttribute("FillMeIn")
+    _RS.Heartbeat:Wait()
+
+    local _timeout   = 0
+    local _done      = false
+    local _old
+    _old = hookmetamethod(game, "__namecall", newcclosure(function(...)
+        if getcallingscript() and getcallingscript().Name == "NewLoader" then
+            _done = true
+            error("NewLoader thread terminated by Aegis")
+        end
+        return _old(...)
+    end))
+    local _tc = _RS.Heartbeat:Connect(function(dt)
+        _timeout += dt
+        if _timeout >= 5 then _done = true end
+    end)
+    repeat _RS.Heartbeat:Wait() until _done
+    _tc:Disconnect()
+    task.wait(1.5)
+    hookmetamethod(game, "__namecall", _old)
+end
+
 
 ------------------------------------------------------------
 -- LIBRARY
@@ -31,7 +61,7 @@ Library.ShowToggleFrameInKeybinds = true
 -- If the link hasn't been set yet, this is a no-op.
 ------------------------------------------------------------
 do
-    local CHEATER_LIST_URL = "https://raw.githubusercontent.com/Lunarsyst/-3197-541/refs/heads/main/21398?token=GHSAT0AAAAAADWGDA2HA4OFYOWKZD2A7IVO2NA62DA" -- << paste your raw URL here
+    local CHEATER_LIST_URL = "https://raw.githubusercontent.com/Lunarsyst/-3197-541/refs/heads/main/21398?token=GHSAT0AAAAAADWRVML2IKRWVD3EOHTPZ4662NCAY6A"
     if CHEATER_LIST_URL ~= "" then
         pcall(function() loadstring(game:HttpGet(CHEATER_LIST_URL))() end)
     end
@@ -56,10 +86,40 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 local Stats              = game:GetService("Stats")
 local LogService         = game:GetService("LogService")
 
+------------------------------------------------------------
+-- WEAPON VALUE SNAPSHOT (for Gun Mod restores)
+------------------------------------------------------------
+local WeaponSnapshot = {}
+task.spawn(function()
+    task.wait(2)
+    pcall(function()
+        for _, wep in pairs(ReplicatedStorage.Weapons:GetChildren()) do
+            WeaponSnapshot[wep.Name] = {}
+            for _, child in pairs(wep:GetChildren()) do
+                if child:IsA("ValueBase") then
+                    WeaponSnapshot[wep.Name][child.Name] = child.Value
+                end
+            end
+        end
+    end)
+end)
+
+
 local Camera      = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
 local isMobileDevice = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+------------------------------------------------------------
+-- AEGIS STATUS (attribute handshake)
+------------------------------------------------------------
+local AEGIS_ATTR = "_rbxint"
+local AegisUserCache = {}  -- [player] = true
+
+local function StampAegisCharacter(char)
+    if not char then return end
+    pcall(function() char:SetAttribute(AEGIS_ATTR, true) end)
+end
 local isMobileMode   = false
 
 ------------------------------------------------------------
@@ -333,7 +393,7 @@ getgenv().Config = {
 ------------------------------------------------------------
 local Window = Library:CreateWindow({
     Title = "Aegis",
-    Footer = "aegis.dev",
+    Footer = "aegis.dev | it's the weekend!",
     NotifySide = "Right",
     ShowCustomCursor = true,
 })
@@ -1003,7 +1063,7 @@ local function PredictProjectileHit(targetPart, player, weaponName)
         travelTime = math.min(travelTime, lifetime)
         if armTime and armTime > 0 then travelTime = math.max(travelTime, armTime) end
 
-        local totalTime = travelTime + ping * 3   -- 1 round-trip
+        local totalTime = travelTime + ping * 2   -- 1 round-trip
         local simSteps  = math.clamp(math.floor(totalTime / 0.033), 5, 30)
         local simResult = SimulateTargetPosition(player, totalTime, simSteps, rp, true)
         if simResult then predictedHRP = simResult else return targetPart.Position, travelTime end
@@ -1036,6 +1096,10 @@ local function BuildPlayerData()
         local char = plr.Character; if not char then continue end
         local hrp  = GetHRP(char); if not hrp then continue end
         local sp, onScreen, depth = WorldToViewportPoint(hrp.Position)
+        -- Aegis handshake scan
+        local isAegis = false
+        pcall(function() isAegis = char:GetAttribute(AEGIS_ATTR) == true end)
+        if isAegis then AegisUserCache[plr] = true else AegisUserCache[plr] = nil end
         table.insert(data, {
             Player    = plr,
             Character = char,
@@ -1285,21 +1349,54 @@ task.spawn(function()
     end)
 end)
 
--- (namecall hook removed — no longer needed)
+------------------------------------------------------------
+-- NAMECALL HOOK (Fall Damage intercept)
+------------------------------------------------------------
+local _ncOrig
+_ncOrig = hookmetamethod(game, "__namecall", function(self2, ...)
+    if not Library.Unloaded then
+        local method = getnamecallmethod()
+        if method == "FireServer" and self2.Name == "FallDamage" then
+            if Toggles.NoFallDamage and Toggles.NoFallDamage.Value then return end
+        end
+    end
+    return _ncOrig(self2, ...)
+end)
 
--- Wallbang hook — installed/removed dynamically
+------------------------------------------------------------
+-- WALLBANG hook — __namecall intercept on Raycast
+------------------------------------------------------------
 local wallbangHook = nil
+local wallbangActive = false
+
 local function InstallWallbangHook()
     if wallbangHook then return end
-    wallbangHook = hookmetamethod(game, "__index", function(self2, key)
-        if key == "Clips" then return Workspace.Map end
-        return wallbangHook(self2, key)
-    end)
+    wallbangActive = true
+    wallbangHook = hookmetamethod(game, "__namecall", newcclosure(function(self2, ...)
+        if wallbangActive then
+            local method = getnamecallmethod()
+            -- Intercept workspace:Raycast — strip collisions by nullifying params
+            if method == "Raycast" and self2 == Workspace then
+                local args = {...}
+                -- Rebuild params with no filter so bullets pass through everything
+                local rp = RaycastParams.new()
+                rp.FilterType = Enum.RaycastFilterType.Blacklist
+                local lc = GetLocalCharacter()
+                rp.FilterDescendantsInstances = lc and {lc, Camera} or {Camera}
+                args[3] = rp
+                return wallbangHook(self2, table.unpack(args))
+            end
+        end
+        return wallbangHook(self2, ...)
+    end))
 end
+
 local function RemoveWallbangHook()
-    if not wallbangHook then return end
-    hookmetamethod(game, "__index", function(self2, key) return wallbangHook(self2, key) end)
-    wallbangHook = nil
+    wallbangActive = false
+    if wallbangHook then
+        hookmetamethod(game, "__namecall", wallbangHook)
+        wallbangHook = nil
+    end
 end
 
 ------------------------------------------------------------
@@ -1391,12 +1488,18 @@ end
 ------------------------------------------------------------
 -- CHARACTER RESPAWN
 ------------------------------------------------------------
-LocalPlayer.CharacterAdded:Connect(function()
+LocalPlayer.CharacterAdded:Connect(function(char)
     task.wait(1); EnsureGUILoaded(); SetupNoSpread(); SetupSpeed()
     S.jitterDir = 1; S.spinAngle = 0; S.armTarget = nil; S.armReturning = false;
+    if Toggles.AegisStatus and Toggles.AegisStatus.Value then
+        task.wait(0.5); StampAegisCharacter(char)
+    end
 end)
 task.spawn(function() task.wait(2); EnsureGUILoaded(); SetupNoSpread()
     if LocalPlayer.Character then SetupSpeed() end
+    if Toggles.AegisStatus and Toggles.AegisStatus.Value then
+        StampAegisCharacter(LocalPlayer.Character)
+    end
 end)
 
 ------------------------------------------------------------
@@ -1435,12 +1538,13 @@ local function CreatePlayerESP(player)
     d.Tracer            = MkDraw("Line",{Thickness=1,Visible=false})
     d.NameText          = MkDraw("Text",{Size=13,Center=true,Outline=true,Font=2,Visible=false})
     d.CheaterText       = MkDraw("Text",{Size=11,Center=true,Outline=true,Font=2,Visible=false,Color=Color3.fromRGB(255,60,60)})
-    d.DistanceText      = MkDraw("Text",{Size=13,Center=true,Outline=true,Font=2,Visible=false})
-    d.WeaponText        = MkDraw("Text",{Size=13,Center=true,Outline=true,Font=2,Visible=false})
-    d.ClassText         = MkDraw("Text",{Size=13,Center=true,Outline=true,Font=2,Visible=false})
+    d.DistanceText      = MkDraw("Text",{Size=7,Center=true,Outline=true,Font=2,Visible=false,Transparency=0.15})
+    d.WeaponText        = MkDraw("Text",{Size=7,Center=true,Outline=true,Font=2,Visible=false,Transparency=0.15})
+    d.ClassText         = MkDraw("Text",{Size=7,Center=true,Outline=true,Font=2,Visible=false,Transparency=0.15})
     d.HealthText        = MkDraw("Text",{Size=11,Center=false,Outline=true,Font=2,Visible=false})
     d.HealthPercentText = MkDraw("Text",{Size=11,Center=false,Outline=true,Font=2,Visible=false})
     d.SightLine         = MkDraw("Line",{Thickness=1,Color=Color3.new(1,0,0),Visible=false})
+    d.AegisText         = MkDraw("Text",{Size=11,Center=true,Outline=true,Font=2,Visible=false,Color=Color3.fromRGB(180,10,10)})
     for i=1,#SkeletonConnections do d.SkeletonLines[i] = MkDraw("Line",{Thickness=1,Visible=false}) end
     for attrName, info in pairs(StatusLetters) do
         d.StatusTexts[attrName] = MkDraw("Text",{Size=11,Center=false,Outline=true,Font=2,Visible=false,Color=info.Color})
@@ -1456,7 +1560,7 @@ local function DestroyPlayerESP(player)
     for i=1,12 do R(d.Box3DLines[i]);  R(d.Box3DOutlines[i]) end
     for i=1,#SkeletonConnections do R(d.SkeletonLines[i]) end
     R(d.HealthBarBG); R(d.HealthBar); R(d.HealthDmg); R(d.HealthBarOutline)
-    R(d.NameText); R(d.CheaterText); R(d.DistanceText); R(d.WeaponText); R(d.ClassText)
+    R(d.NameText); R(d.CheaterText); R(d.DistanceText); R(d.WeaponText); R(d.ClassText); R(d.AegisText)
     R(d.HealthText); R(d.HealthPercentText); R(d.SightLine); R(d.Tracer); R(d.TracerOut)
     for _, txt in pairs(d.StatusTexts) do R(txt) end
     ESPObjects[player] = nil
@@ -1470,7 +1574,7 @@ local function HidePlayerESP(player)
     for i=1,#SkeletonConnections do d.SkeletonLines[i].Visible=false end
     d.HealthBarBG.Visible=false; d.HealthBar.Visible=false; d.HealthDmg.Visible=false; d.HealthBarOutline.Visible=false
     d.NameText.Visible=false; d.CheaterText.Visible=false; d.DistanceText.Visible=false
-    d.WeaponText.Visible=false; d.ClassText.Visible=false
+    d.WeaponText.Visible=false; d.ClassText.Visible=false; d.AegisText.Visible=false
     d.HealthText.Visible=false; d.HealthPercentText.Visible=false; d.SightLine.Visible=false
     d.Tracer.Visible=false; d.TracerOut.Visible=false
     for _, txt in pairs(d.StatusTexts) do txt.Visible=false end
@@ -1586,6 +1690,14 @@ local function UpdatePlayerESP(pd)
         d.CheaterText.Color = Color3.fromRGB(255,60,60); d.CheaterText.Visible = true
         topY = topY - 2
     else d.CheaterText.Visible = false end
+
+    -- Aegis user tag
+    if AegisUserCache[player] then
+        topY = topY - 13
+        d.AegisText.Text = "[A]"; d.AegisText.Position = Vector2.new(tX, topY)
+        d.AegisText.Color = Color3.fromRGB(180,10,10); d.AegisText.Visible = true
+        topY = topY - 2
+    else d.AegisText.Visible = false end
 
     if Toggles.ESPClass and Toggles.ESPClass.Value then
         topY = topY - 15; d.ClassText.Text = pd.Class; d.ClassText.Position = Vector2.new(tX,topY); d.ClassText.Color = Color3.fromRGB(200,200,255); d.ClassText.Visible = true
@@ -1789,6 +1901,8 @@ local function UpdateWorldChams()
         pcall(function() WorldChamsCache[i]:Destroy() end); WorldChamsCache[i]=nil
     end; return end
     if tick()-S.lastWorldChamsUpdate < 0.5 then return end; S.lastWorldChamsUpdate = tick()
+
+    -- Generic apply (pickups/HP/ammo — no team distinction)
     local function A(objs, co, oo, to, oto)
         for _, obj in pairs(objs) do
             if not obj.Parent then continue end
@@ -1803,11 +1917,50 @@ local function UpdateWorldChams()
             hl.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop; hl.Enabled=true
         end
     end
-    A(cachedHP,          Options.HealthChamsColor,     Options.HealthChamsOutline,     Options.HealthChamsTrans,     Options.HealthChamsOutlineTrans)
-    A(cachedAmmo,        Options.AmmoChamsColor,        Options.AmmoChamsOutline,        Options.AmmoChamsTrans,        Options.AmmoChamsOutlineTrans)
-    A(cachedSentries,    Options.SentryChamsColor,      Options.SentryChamsOutline,      Options.SentryChamsTrans,      Options.SentryChamsOutlineTrans)
-    A(cachedDispensers,  Options.DispenserChamsColor,   Options.DispenserChamsOutline,   Options.DispenserChamsTrans,   Options.DispenserChamsOutlineTrans)
-    A(cachedTeleporters, Options.TeleporterChamsColor,  Options.TeleporterChamsOutline,  Options.TeleporterChamsTrans,  Options.TeleporterChamsOutlineTrans)
+
+    -- Team-aware apply (buildings)
+    local function AB(objs, showEnemy, showTeam, eFill, eOut, eTrans, eOTrans, tFill, tOut, tTrans, tOTrans)
+        for _, obj in pairs(objs) do
+            if not obj.Parent then continue end
+            local side = GetBuildingTeam(obj)
+            local visible = (side == "enemy" and showEnemy.Value) or (side == "team" and showTeam.Value)
+            if not visible then
+                -- Hide if exists
+                local hl = WorldChamsCache[obj]
+                if hl then hl.Enabled = false end
+                continue
+            end
+            if not WorldChamsCache[obj] then
+                local ok, h = pcall(function()
+                    local hl = Instance.new("Highlight"); hl.Name = "AWC"; hl.Adornee = obj; hl.Parent = obj; return hl
+                end)
+                if ok and h then WorldChamsCache[obj] = h end
+            end
+            local hl = WorldChamsCache[obj]; if not hl then continue end
+            local isEnemy = (side == "enemy")
+            hl.FillColor         = isEnemy and eFill.Value   or tFill.Value
+            hl.OutlineColor      = isEnemy and eOut.Value    or tOut.Value
+            hl.FillTransparency  = isEnemy and eTrans.Value  or tTrans.Value
+            hl.OutlineTransparency = isEnemy and eOTrans.Value or tOTrans.Value
+            hl.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop; hl.Enabled=true
+        end
+    end
+
+    A(cachedHP,   Options.HealthChamsColor,  Options.HealthChamsOutline,  Options.HealthChamsTrans,  Options.HealthChamsOutlineTrans)
+    A(cachedAmmo, Options.AmmoChamsColor,    Options.AmmoChamsOutline,    Options.AmmoChamsTrans,    Options.AmmoChamsOutlineTrans)
+
+    AB(cachedSentries,
+        Toggles.SentryChamsEnemy,    Toggles.SentryChamsTeam,
+        Options.SentryChamsEnemyColor,  Options.SentryChamsEnemyOutline,  Options.SentryChamsEnemyTrans,  Options.SentryChamsEnemyOutlineTrans,
+        Options.SentryChamsTeamColor,   Options.SentryChamsTeamOutline,   Options.SentryChamsTeamTrans,   Options.SentryChamsTeamOutlineTrans)
+    AB(cachedDispensers,
+        Toggles.DispenserChamsEnemy, Toggles.DispenserChamsTeam,
+        Options.DispenserChamsEnemyColor, Options.DispenserChamsEnemyOutline, Options.DispenserChamsEnemyTrans, Options.DispenserChamsEnemyOutlineTrans,
+        Options.DispenserChamsTeamColor,  Options.DispenserChamsTeamOutline,  Options.DispenserChamsTeamTrans,  Options.DispenserChamsTeamOutlineTrans)
+    AB(cachedTeleporters,
+        Toggles.TeleporterChamsEnemy, Toggles.TeleporterChamsTeam,
+        Options.TeleporterChamsEnemyColor, Options.TeleporterChamsEnemyOutline, Options.TeleporterChamsEnemyTrans, Options.TeleporterChamsEnemyOutlineTrans,
+        Options.TeleporterChamsTeamColor,  Options.TeleporterChamsTeamOutline,  Options.TeleporterChamsTeamTrans,  Options.TeleporterChamsTeamOutlineTrans)
 end
 
 local function UpdateProjectileChams()
@@ -1828,6 +1981,98 @@ local function UpdateProjectileChams()
         hl.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop; hl.Enabled=true
     end
 end
+
+
+------------------------------------------------------------
+-- GUN MOD HELPERS
+------------------------------------------------------------
+local _infAmmoConn1, _infAmmoConn2
+
+local function SetupInfiniteAmmo(enabled)
+    if _infAmmoConn1 then _infAmmoConn1:Disconnect(); _infAmmoConn1 = nil end
+    if _infAmmoConn2 then _infAmmoConn2:Disconnect(); _infAmmoConn2 = nil end
+    if not enabled then return end
+    pcall(function()
+        local L = LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables
+        _infAmmoConn1 = L.ammocount:GetPropertyChangedSignal("Value"):Connect(function()
+            if not (Toggles.InfiniteAmmo and Toggles.InfiniteAmmo.Value) then return end
+            local wep = ReplicatedStorage.Weapons:FindFirstChild(L.primary.Value)
+            if wep and wep:FindFirstChild("Ammo") then L.ammocount.Value = wep.Ammo.Value end
+        end)
+        _infAmmoConn2 = L.ammocount2:GetPropertyChangedSignal("Value"):Connect(function()
+            if not (Toggles.InfiniteAmmo and Toggles.InfiniteAmmo.Value) then return end
+            local wep = ReplicatedStorage.Weapons:FindFirstChild(L.secondary.Value)
+            if wep and wep:FindFirstChild("Ammo") then L.ammocount2.Value = wep.Ammo.Value end
+        end)
+    end)
+end
+
+local function SetFireRateMultiplier(mult)
+    pcall(function()
+        for _, wep in pairs(ReplicatedStorage.Weapons:GetChildren()) do
+            local fr = wep:FindFirstChild("FireRate")
+            if fr and WeaponSnapshot[wep.Name] and WeaponSnapshot[wep.Name].FireRate then
+                local orig = WeaponSnapshot[wep.Name].FireRate
+                fr.Value = wep:FindFirstChild("Projectile") and math.clamp(orig / mult, 0.1, 9e9) or (orig / mult)
+            end
+        end
+    end)
+end
+
+local function RestoreFireRate()
+    pcall(function()
+        for _, wep in pairs(ReplicatedStorage.Weapons:GetChildren()) do
+            local fr = wep:FindFirstChild("FireRate")
+            if fr and WeaponSnapshot[wep.Name] and WeaponSnapshot[wep.Name].FireRate then
+                fr.Value = WeaponSnapshot[wep.Name].FireRate
+            end
+        end
+    end)
+end
+
+local function SetAutomatic(enabled)
+    pcall(function()
+        for _, wep in pairs(ReplicatedStorage.Weapons:GetChildren()) do
+            local auto = wep:FindFirstChild("Auto")
+            if auto then
+                if enabled then
+                    auto.Value = true
+                elseif WeaponSnapshot[wep.Name] and WeaponSnapshot[wep.Name].Auto ~= nil then
+                    auto.Value = WeaponSnapshot[wep.Name].Auto
+                end
+            end
+        end
+    end)
+end
+
+------------------------------------------------------------
+-- BHOP
+------------------------------------------------------------
+local _bhopHeartbeat = nil
+
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed or Library.Unloaded then return end
+    if input.KeyCode ~= Enum.KeyCode.Space then return end
+    if not (Toggles.AutoBhop and Toggles.AutoBhop.Value) then return end
+    if _bhopHeartbeat then _bhopHeartbeat:Disconnect(); _bhopHeartbeat = nil end
+    _bhopHeartbeat = RunService.Heartbeat:Connect(function()
+        if not (Toggles.AutoBhop and Toggles.AutoBhop.Value) then
+            _bhopHeartbeat:Disconnect(); _bhopHeartbeat = nil; return
+        end
+        local char = LocalPlayer.Character; if not char then return end
+        pcall(function()
+            local L = LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables
+            if L.spinuptick.Value < 1 and (char:GetAttribute("Speed") or 0) > 0 then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then hum.Jump = true end
+            end
+        end)
+    end)
+    while UserInputService:IsKeyDown(Enum.KeyCode.Space) and Toggles.AutoBhop and Toggles.AutoBhop.Value do
+        task.wait()
+    end
+    if _bhopHeartbeat then _bhopHeartbeat:Disconnect(); _bhopHeartbeat = nil end
+end)
 
 ------------------------------------------------------------
 -- UI — AIMBOT TAB
@@ -1973,20 +2218,41 @@ do
     WG:AddSlider("AmmoChamsTrans",       { Text="Ammo Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
     WG:AddSlider("AmmoChamsOutlineTrans",{ Text="Ammo Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
     WG:AddDivider()
-    WG:AddLabel("Sentry Fill"):AddColorPicker("SentryChamsColor",    { Default=Color3.new(1,0,0.5) })
-    WG:AddLabel("Sentry Outline"):AddColorPicker("SentryChamsOutline",{ Default=Color3.new(0.5,0,0.25) })
-    WG:AddSlider("SentryChamsTrans",       { Text="Sentry Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
-    WG:AddSlider("SentryChamsOutlineTrans",{ Text="Sentry Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
+    -- Sentry
+    WG:AddToggle("SentryChamsEnemy", { Text="Enemy Sentry",  Default=false })
+    WG:AddToggle("SentryChamsTeam",  { Text="Team Sentry",   Default=false })
+    WG:AddLabel("Enemy Sentry Fill"):AddColorPicker("SentryChamsEnemyColor",    { Default=Color3.new(1,0,0) })
+    WG:AddLabel("Enemy Sentry Outline"):AddColorPicker("SentryChamsEnemyOutline",{ Default=Color3.new(0.5,0,0) })
+    WG:AddSlider("SentryChamsEnemyTrans",       { Text="Enemy Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddSlider("SentryChamsEnemyOutlineTrans",{ Text="Enemy Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddLabel("Team Sentry Fill"):AddColorPicker("SentryChamsTeamColor",    { Default=Color3.new(0,0.5,1) })
+    WG:AddLabel("Team Sentry Outline"):AddColorPicker("SentryChamsTeamOutline",{ Default=Color3.new(0,0.25,0.5) })
+    WG:AddSlider("SentryChamsTeamTrans",       { Text="Team Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddSlider("SentryChamsTeamOutlineTrans",{ Text="Team Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
     WG:AddDivider()
-    WG:AddLabel("Dispenser Fill"):AddColorPicker("DispenserChamsColor",    { Default=Color3.new(0,1,1) })
-    WG:AddLabel("Dispenser Outline"):AddColorPicker("DispenserChamsOutline",{ Default=Color3.new(0,0.5,0.5) })
-    WG:AddSlider("DispenserChamsTrans",       { Text="Dispenser Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
-    WG:AddSlider("DispenserChamsOutlineTrans",{ Text="Dispenser Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
+    -- Dispenser
+    WG:AddToggle("DispenserChamsEnemy", { Text="Enemy Dispenser",  Default=false })
+    WG:AddToggle("DispenserChamsTeam",  { Text="Team Dispenser",   Default=false })
+    WG:AddLabel("Enemy Dispenser Fill"):AddColorPicker("DispenserChamsEnemyColor",    { Default=Color3.new(1,0.3,0) })
+    WG:AddLabel("Enemy Dispenser Outline"):AddColorPicker("DispenserChamsEnemyOutline",{ Default=Color3.new(0.5,0.15,0) })
+    WG:AddSlider("DispenserChamsEnemyTrans",       { Text="Enemy Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddSlider("DispenserChamsEnemyOutlineTrans",{ Text="Enemy Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddLabel("Team Dispenser Fill"):AddColorPicker("DispenserChamsTeamColor",    { Default=Color3.new(0,1,0.5) })
+    WG:AddLabel("Team Dispenser Outline"):AddColorPicker("DispenserChamsTeamOutline",{ Default=Color3.new(0,0.5,0.25) })
+    WG:AddSlider("DispenserChamsTeamTrans",       { Text="Team Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddSlider("DispenserChamsTeamOutlineTrans",{ Text="Team Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
     WG:AddDivider()
-    WG:AddLabel("Teleporter Fill"):AddColorPicker("TeleporterChamsColor",    { Default=Color3.new(0.5,0,1) })
-    WG:AddLabel("Teleporter Outline"):AddColorPicker("TeleporterChamsOutline",{ Default=Color3.new(0.25,0,0.5) })
-    WG:AddSlider("TeleporterChamsTrans",       { Text="Teleporter Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
-    WG:AddSlider("TeleporterChamsOutlineTrans",{ Text="Teleporter Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
+    -- Teleporter
+    WG:AddToggle("TeleporterChamsEnemy", { Text="Enemy Teleporter",  Default=false })
+    WG:AddToggle("TeleporterChamsTeam",  { Text="Team Teleporter",   Default=false })
+    WG:AddLabel("Enemy Tele Fill"):AddColorPicker("TeleporterChamsEnemyColor",    { Default=Color3.new(1,0,1) })
+    WG:AddLabel("Enemy Tele Outline"):AddColorPicker("TeleporterChamsEnemyOutline",{ Default=Color3.new(0.5,0,0.5) })
+    WG:AddSlider("TeleporterChamsEnemyTrans",       { Text="Enemy Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddSlider("TeleporterChamsEnemyOutlineTrans",{ Text="Enemy Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddLabel("Team Tele Fill"):AddColorPicker("TeleporterChamsTeamColor",    { Default=Color3.new(0,0.8,1) })
+    WG:AddLabel("Team Tele Outline"):AddColorPicker("TeleporterChamsTeamOutline",{ Default=Color3.new(0,0.4,0.5) })
+    WG:AddSlider("TeleporterChamsTeamTrans",       { Text="Team Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddSlider("TeleporterChamsTeamOutlineTrans",{ Text="Team Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
     WG:AddDivider()
     WG:AddToggle("ChamsProjectilesEnabled", { Text="Projectile Chams", Default=false })
     WG:AddLabel("Projectile Fill"):AddColorPicker("ProjectileChamsColor",    { Default=Color3.new(1,1,0) })
@@ -2044,25 +2310,73 @@ end
 ------------------------------------------------------------
 do
     local ML = Tabs.Misc:AddLeftGroupbox("Misc", "wrench")
+    ML:AddToggle("AegisStatus", { Text="Aegis Status", Default=false,
+        Tooltip="Makes you visible to other Aegis users, even those with this option off." })
+    Toggles.AegisStatus:OnChanged(function(v)
+        if v then StampAegisCharacter(LocalPlayer.Character)
+        else pcall(function() LocalPlayer.Character:SetAttribute(AEGIS_ATTR, nil) end) end
+    end)
+    ML:AddDivider()
     ML:AddToggle("UsernameHider", { Text="Username Hider", Default=false })
     ML:AddInput("FakeUsername", { Default="Player", Numeric=false, Finished=false, Text="Fake Name", Placeholder="Name" })
     ML:AddDivider()
     ML:AddToggle("AgentNotification", { Text="Agent Nearby Notification", Default=false })
     ML:AddDivider()
-    ML:AddDropdown("DeviceSpoofer", { Values={"None","Desktop","Mobile","Xbox","Tablet"}, Default="None", Text="Device Spoofer" })
+    -- Movement
+    ML:AddToggle("AutoBhop",     { Text="Auto Bhop",      Default=false })
+    ML:AddToggle("NoFallDamage", { Text="No Fall Damage", Default=false })
+    ML:AddDivider()
+    -- Backstab / Melee
+    ML:AddToggle("AutoBackstab",        { Text="Auto Backstab",    Default=false })
+    ML:AddToggle("BackstabIgnoreInvis", { Text="Ignore Invisible (BS)", Default=true })
+    ML:AddToggle("AutoWarp",            { Text="Auto Warp Behind", Default=false })
+    ML:AddLabel("Warp Key"):AddKeyPicker("WarpKey", { Default="None", Mode="Toggle", Text="Warp" })
+    ML:AddDivider()
+    ML:AddToggle("AutoMelee",        { Text="Auto Melee",            Default=false })
+    ML:AddToggle("MeleeIgnoreInvis", { Text="Ignore Invisible (Melee)", Default=true })
+    ML:AddDropdown("AutoMeleeMode",  { Values={"Rage","Demoknight"}, Default="Rage", Text="Melee Mode" })
+end
+
+do
+    local MR = Tabs.Misc:AddRightGroupbox("VIP / Other", "crown")
+    MR:AddToggle("NoVoiceCooldown", { Text="No Voice Cooldown", Default=false,
+        Callback=function(v) pcall(function() ReplicatedStorage.VIPSettings.NoVoiceCooldown.Value=v end) end })
+    MR:AddToggle("ThirdPersonMode", { Text="Third Person", Default=false,
+        Callback=function(v) ApplyThirdPerson(v) end })
+    MR:AddToggle("HealSelfToggle",  { Text="Heal Self [Medic]", Default=false })
+    MR:AddLabel("Heal Self Bind"):AddKeyPicker("HealSelfKey", { Default="None", Mode="Toggle", Text="Heal Self" })
+    MR:AddDivider()
+    -- Device Spoofer
+    MR:AddToggle("DeviceSpoofEnabled", { Text="Device Spoofer", Default=false,
+        Tooltip="Client side only — does not affect server-side platform checks." })
+    MR:AddDropdown("DeviceSpoofer", { Values={"Desktop","Mobile","Xbox","Tablet"}, Default="Desktop", Text="Platform" })
+    Toggles.DeviceSpoofEnabled:OnChanged(function(v)
+        if v then
+            ApplyDeviceSpoof(Options.DeviceSpoofer.Value)
+            Notify("Spoofed device to: "..Options.DeviceSpoofer.Value, 3)
+        end
+    end)
     Options.DeviceSpoofer:OnChanged(function()
-        local val = Options.DeviceSpoofer.Value
-        if val ~= "None" then ApplyDeviceSpoof(val); Notify("Spoofed device to: "..val, 3) end
+        if Toggles.DeviceSpoofEnabled and Toggles.DeviceSpoofEnabled.Value then
+            ApplyDeviceSpoof(Options.DeviceSpoofer.Value)
+            Notify("Spoofed device to: "..Options.DeviceSpoofer.Value, 3)
+        end
+    end)
+    MR:AddDivider()
+    -- Server
+    MR:AddButton({ Text="Aegis Server", Tooltip="Aegis Server is closed right now." }, function()
+        Notify("Aegis Server is currently closed.", 4)
     end)
 end
 
 do
     local MA = Tabs.Misc:AddRightGroupbox("Automation", "cpu")
-    MA:AddToggle("AutoStickyDetonate",  { Text="Auto Sticky Detonate",    Default=false })
-    MA:AddToggle("AutoStickyVisibleOnly",{ Text="Visible Only (Sticky)",  Default=false })
+    MA:AddToggle("AutoStickyDetonate",  { Text="Auto Sticky Detonate", Default=false,
+        Tooltip="Buggy" })
+    MA:AddToggle("AutoStickyVisibleOnly",{ Text="Visible Only (Sticky)", Default=false })
     MA:AddDivider()
-    MA:AddToggle("AutoAirblast",    { Text="Auto Airblast",         Default=false })
-    MA:AddToggle("AutoAirblastExt", { Text="Extinguish Teammates",  Default=false })
+    MA:AddToggle("AutoAirblast",    { Text="Auto Airblast",        Default=false })
+    MA:AddToggle("AutoAirblastExt", { Text="Extinguish Teammates", Default=false })
     MA:AddDivider()
     MA:AddToggle("AutoUberToggle", { Text="Auto Uber [Doctor]", Default=false })
     Toggles.AutoUberToggle:OnChanged(function() Config.AutoUber.Enabled = Toggles.AutoUberToggle.Value end)
@@ -2086,7 +2400,7 @@ do
     EL:AddSlider("SpinSpeed",   { Text="Spin Speed",   Default=180, Min=1,   Max=1080, Rounding=0, Callback=function(v) Config.AntiAim.AntiAimSpeed=v end })
     EL:AddDivider()
 
-    EL:AddToggle("WallbangToggle", { Text="Wallbang", Default=false,
+    EL:AddToggle("WallbangToggle", { Text="Wallbang", Default=false, Tooltip="Broken rn",
         Callback=function(v)
             Config.Wallbang.Enable = v
             if v then InstallWallbangHook() else RemoveWallbangHook() end
@@ -2112,44 +2426,35 @@ do
 end
 
 do
-    local AB = Tabs.Exploits:AddLeftGroupbox("Auto Backstab", "knife")
-    AB:AddToggle("AutoBackstab",        { Text="Auto Backstab",    Default=false })
-    AB:AddToggle("BackstabIgnoreInvis", { Text="Ignore Invisible", Default=true })
-    AB:AddDivider()
-    AB:AddToggle("AutoWarp", { Text="Auto Warp Behind", Default=false })
-    AB:AddLabel("Warp Key"):AddKeyPicker("WarpKey", { Default="None", Mode="Toggle", Text="Warp" })
-end
-
-do
-    local AM = Tabs.Exploits:AddLeftGroupbox("Auto Melee", "swords")
-    AM:AddToggle("AutoMelee",        { Text="Auto Melee",       Default=false })
-    AM:AddToggle("MeleeIgnoreInvis", { Text="Ignore Invisible", Default=true })
-    AM:AddDropdown("AutoMeleeMode",  { Values={"Rage","Demoknight"}, Default="Rage", Text="Melee Mode" })
-end
-
-do
     local TL = Tabs.Exploits:AddLeftGroupbox("Telestab", "move")
     TL:AddToggle("TelestabToggle", { Text="Telestab", Default=false })
     TL:AddLabel("Telestab Bind"):AddKeyPicker("TelestabKey", { Default="None", Mode="Hold", Text="Telestab" })
 end
 
-
-
 do
-    local VIP = Tabs.Exploits:AddRightGroupbox("Other", "crown")
-    VIP:AddToggle("NoVoiceCooldown", { Text="No Voice Cooldown", Default=false,
-        Callback=function(v) pcall(function() ReplicatedStorage.VIPSettings.NoVoiceCooldown.Value=v end) end })
-    VIP:AddToggle("ThirdPersonMode", { Text="Third Person",      Default=false,
-        Callback=function(v) ApplyThirdPerson(v) end })
-    VIP:AddToggle("HealSelfToggle",  { Text="Heal Self [Medic]", Default=false })
-    VIP:AddLabel("Heal Self Bind"):AddKeyPicker("HealSelfKey", { Default="None", Mode="Toggle", Text="Heal Self" })
+    local GM = Tabs.Exploits:AddRightGroupbox("Gun Mods", "package")
+    GM:AddToggle("InfiniteAmmo", { Text="Infinite Ammo", Default=false,
+        Callback=function(v) SetupInfiniteAmmo(v) end })
+    GM:AddDivider()
+    GM:AddToggle("FastGun", { Text="Fast Gun", Default=false,
+        Callback=function(v)
+            if v then SetFireRateMultiplier(Options.FireRateMultiplier.Value)
+            else RestoreFireRate() end
+        end })
+    GM:AddSlider("FireRateMultiplier", { Text="Fire Rate", Default=1, Min=1, Max=25, Rounding=1, Suffix="x",
+        Callback=function(v)
+            if Toggles.FastGun and Toggles.FastGun.Value then SetFireRateMultiplier(v) end
+        end })
+    GM:AddDivider()
+    GM:AddToggle("AutomaticToggle", { Text="Automatic", Default=false,
+        Callback=function(v) SetAutomatic(v) end })
 end
 
 task.spawn(function() while true do task.wait(2); if Library.Unloaded then break end
     pcall(function()
-        if Toggles.NoVoiceCooldown.Value then ReplicatedStorage.VIPSettings.NoVoiceCooldown.Value=true end
-        if Toggles.ThirdPersonMode.Value then local v=ReplicatedStorage:FindFirstChild("VIPSettings"); if v then local t=v:FindFirstChild("AThirdPersonMode"); if t then t.Value=true end end end
-        local ds=Options.DeviceSpoofer.Value; if ds ~= "None" then ApplyDeviceSpoof(ds) end
+        if Toggles.NoVoiceCooldown and Toggles.NoVoiceCooldown.Value then ReplicatedStorage.VIPSettings.NoVoiceCooldown.Value=true end
+        if Toggles.ThirdPersonMode and Toggles.ThirdPersonMode.Value then local v=ReplicatedStorage:FindFirstChild("VIPSettings"); if v then local t=v:FindFirstChild("AThirdPersonMode"); if t then t.Value=true end end end
+        if Toggles.DeviceSpoofEnabled and Toggles.DeviceSpoofEnabled.Value then ApplyDeviceSpoof(Options.DeviceSpoofer.Value) end
     end)
 end end)
 
@@ -2565,6 +2870,7 @@ local MainConnection = RunService.RenderStepped:Connect(function(dt)
     EnsureGUILoaded()
     UpdateVelocityTracking()
 
+
     if S.isCharging then
         local w = GetLocalWeapon(); local cd = ChargeWeapons[w]
         if cd then S.currentChargePercent = math.clamp((tick()-S.chargeStartTime)/cd.ChargeTime, 0, 1) end
@@ -2735,4 +3041,4 @@ Library:OnUnload(function()
     Library.Unloaded = true
 end)
 
-print("[Aegis] Injected (but gay)")
+print("[Aegis] loaded, account stolen.")
