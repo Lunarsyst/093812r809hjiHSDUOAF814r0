@@ -2441,7 +2441,7 @@ do
             if v then SetFireRateMultiplier(Options.FireRateMultiplier.Value)
             else RestoreFireRate() end
         end })
-    GM:AddSlider("FireRateMultiplier", { Text="Fire Rate", Default=1, Min=1, Max=25, Rounding=1, Suffix="x",
+    GM:AddSlider("FireRateMultiplier", { Text="Fire Rate", Default=1, Min=1, Max=100, Rounding=1, Suffix="x",
         Callback=function(v)
             if Toggles.FastGun and Toggles.FastGun.Value then SetFireRateMultiplier(v) end
         end })
