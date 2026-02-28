@@ -2778,7 +2778,7 @@ end
 LogService.MessageOut:Connect(function(message)
     if type(message) ~= "string" then return end
     if message:find("HIT_DEBUG") and tick()-S.lastHitDebugNotif > 2 then
-        Notify("Shot rejected by server — ping may be too high", 3); S.lastHitDebugNotif=tick()
+        Notify("Shot rejected by server", 3); S.lastHitDebugNotif=tick()
     end
 end)
 
