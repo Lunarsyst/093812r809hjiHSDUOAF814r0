@@ -1,43 +1,50 @@
+-- Aegis | Typical Colors 2
+-- Obsidian UI Library
+
 ------------------------------------------------------------
 -- PLACE CHECK
 ------------------------------------------------------------
 if game.PlaceId ~= 328028363 then
-    game:GetService("Players").LocalPlayer:Kick("[Aegis] join tc2 jittleyang")
+    game:GetService("Players").LocalPlayer:Kick("[Aegis] join tc2 diddyblud")
     return
 end
 
 if setthreadidentity then setthreadidentity(8) end
 
 ------------------------------------------------------------
--- ANTICHEAT BYPASS (blocks NewLoader before anything loads)
+-- ANTICHEAT BYPASS (getreg thread cancellation)
+-- Enumerates all live coroutines via getreg(), cancels any
+-- threads sourced from NewLoader. Expects exactly 3.
 ------------------------------------------------------------
 do
     local _RS  = game:GetService("RunService")
     local _Rep = game:GetService("ReplicatedStorage")
     local _LP  = game:GetService("Players").LocalPlayer or game:GetService("Players").PlayerAdded:Wait()
-    -- Wait for TC2 to finish server setup before hooking
+
     repeat _RS.Heartbeat:Wait()
     until _Rep:GetAttribute("sv_setup") and _LP:GetAttribute("FillMeIn")
-    _RS.Heartbeat:Wait()
 
-    local _timeout   = 0
-    local _done      = false
-    local _old
-    _old = hookmetamethod(game, "__namecall", newcclosure(function(...)
-        if getcallingscript() and getcallingscript().Name == "NewLoader" then
-            _done = true
-            error("NewLoader thread terminated by Aegis")
+    for i = 1, 20 do _RS.Heartbeat:Wait() end
+
+    local cancelled = 0
+    local t0 = os.clock()
+
+    for _, thread in getreg() do
+        if typeof(thread) ~= "thread" then continue end
+        local src = debug.info(thread, 1, "s")
+        if src and src:match("NewLoader") then
+            task.cancel(thread)
+            cancelled += 1
+            if cancelled == 3 then break end
         end
-        return _old(...)
-    end))
-    local _tc = _RS.Heartbeat:Connect(function(dt)
-        _timeout += dt
-        if _timeout >= 5 then _done = true end
-    end)
-    repeat _RS.Heartbeat:Wait() until _done
-    _tc:Disconnect()
-    task.wait(1.5)
-    hookmetamethod(game, "__namecall", _old)
+    end
+
+    print(string.format("[Aegis] bypass: %.4fs | %d thread(s) cancelled", os.clock() - t0, cancelled))
+    if cancelled ~= 3 then
+        warn(string.format("[Aegis] expected 3 threads, got %d — gun mods may be unsafe", cancelled))
+    end
+
+    getgenv().tc2_anticheat_breaker = (cancelled == 3)
 end
 
 
@@ -125,8 +132,8 @@ local isMobileMode   = false
 ------------------------------------------------------------
 -- CONSTANTS
 ------------------------------------------------------------
-local BACKSTAB_RANGE         = 7.5
-local MELEE_RANGE_RAGE       = 7.5
+local BACKSTAB_RANGE         = 7.8
+local MELEE_RANGE_RAGE       = 7.8
 local MELEE_RANGE_DEMOKNIGHT = 9
 local TC2_GRAVITY            = 50
 local TC2_JUMP_POWER         = 16
@@ -383,8 +390,6 @@ getgenv().Config = {
     Wallbang      = {Enable=false},
     NoSpread      = {Enable=false, Multiplier=0.2},
     Speed         = {Enable=false, Value=300},
-    Notifications = {ShowHits=false},
-    Flags         = {Enabled=false, ShowDamage=false, ShowRemainingHealth=false, ShowName=false},
     AutoUber      = {Enabled=false, HealthPercent=40, Condition="Both"},
 }
 
@@ -393,7 +398,7 @@ getgenv().Config = {
 ------------------------------------------------------------
 local Window = Library:CreateWindow({
     Title = "Aegis",
-    Footer = "aegis.dev | it's the weekend!",
+    Footer = "aegis.dev | what is the best tc2 cheat currently? (in your opinion)",
     NotifySide = "Right",
     ShowCustomCursor = true,
 })
@@ -1063,7 +1068,7 @@ local function PredictProjectileHit(targetPart, player, weaponName)
         travelTime = math.min(travelTime, lifetime)
         if armTime and armTime > 0 then travelTime = math.max(travelTime, armTime) end
 
-        local totalTime = travelTime + ping * 2   -- 1 round-trip
+        local totalTime = travelTime + ping * 1   -- 1 round-trip
         local simSteps  = math.clamp(math.floor(totalTime / 0.033), 5, 30)
         local simResult = SimulateTargetPosition(player, totalTime, simSteps, rp, true)
         if simResult then predictedHRP = simResult else return targetPart.Position, travelTime end
@@ -1295,9 +1300,24 @@ task.spawn(function()
                 local target    = FrameCache.silentTarget
                 local targetPlr = FrameCache.silentTargetPlr
                 if target then
-                    if isProj and targetPlr then
-                        local cf, aimPos = GetProjectileAimCFrame(target, targetPlr, weapon)
-                        if cf and aimPos then
+                    if isProj then
+                        if targetPlr then
+                            -- moving player: full prediction
+                            local cf, aimPos = GetProjectileAimCFrame(target, targetPlr, weapon)
+                            if cf and aimPos then
+                                if Toggles.SilentAimArms.Value then TriggerAimArms(aimPos) end
+                                return cf
+                            end
+                        else
+                            -- static target (sentry, sticky): gravity arc only, no movement prediction
+                            local spd, grav = GetCurrentWeaponSpeed(weapon)
+                            local aimPos = target.Position
+                            local cf
+                            if grav and grav > 0 then
+                                cf = CFrame.lookAt(FrameCache.camPos, CalculateAimPoint(FrameCache.camPos, aimPos, spd, grav, weapon))
+                            else
+                                cf = CFrame.lookAt(FrameCache.camPos, aimPos)
+                            end
                             if Toggles.SilentAimArms.Value then TriggerAimArms(aimPos) end
                             return cf
                         end
@@ -1516,6 +1536,18 @@ local PredictionIndicator = Drawing.new("Text")
 PredictionIndicator.Size = 24; PredictionIndicator.Center = true
 PredictionIndicator.Outline = true; PredictionIndicator.Font = 2; PredictionIndicator.Visible = false
 
+-- Projectile path visualization — pool of 32 Drawing lines
+local PATH_POOL_SIZE = 32
+local PathLines = {}
+do
+    for i = 1, PATH_POOL_SIZE do
+        local ln = Drawing.new("Line")
+        ln.Thickness = 1.5; ln.Color = Color3.fromRGB(255,180,0)
+        ln.Transparency = 1; ln.Visible = false
+        PathLines[i] = ln
+    end
+end
+
 local function MkDraw(t, p)
     local d = Drawing.new(t); for k,v in pairs(p or {}) do d[k] = v end; return d
 end
@@ -1524,9 +1556,9 @@ local function CreatePlayerESP(player)
     if ESPObjects[player] then return end
     local d = {BoxLines={}, BoxOutlines={}, CornerLines={}, CornerOutlines={},
                Box3DLines={}, Box3DOutlines={}, SkeletonLines={}, StatusTexts={}, Hidden=true}
-    for i=1,4  do d.BoxOutlines[i]   = MkDraw("Line",{Thickness=3,Color=Color3.new(0,0,0),Visible=false}) end
-    for i=1,8  do d.CornerOutlines[i]= MkDraw("Line",{Thickness=3,Color=Color3.new(0,0,0),Visible=false}) end
-    for i=1,12 do d.Box3DOutlines[i] = MkDraw("Line",{Thickness=3,Color=Color3.new(0,0,0),Visible=false}) end
+    for i=1,4  do d.BoxOutlines[i]   = MkDraw("Line",{Thickness=1,Color=Color3.new(0,0,0),Visible=false}) end
+    for i=1,8  do d.CornerOutlines[i]= MkDraw("Line",{Thickness=1,Color=Color3.new(0,0,0),Visible=false}) end
+    for i=1,12 do d.Box3DOutlines[i] = MkDraw("Line",{Thickness=1,Color=Color3.new(0,0,0),Visible=false}) end
     d.HealthBarBG      = MkDraw("Line",{Thickness=3,Color=Color3.fromRGB(20,20,20),Visible=false})
     d.HealthBarOutline = MkDraw("Square",{Filled=false,Thickness=1,Color=Color3.new(0,0,0),Visible=false})
     d.TracerOut        = MkDraw("Line",{Thickness=3,Color=Color3.new(0,0,0),Visible=false})
@@ -1538,9 +1570,9 @@ local function CreatePlayerESP(player)
     d.Tracer            = MkDraw("Line",{Thickness=1,Visible=false})
     d.NameText          = MkDraw("Text",{Size=13,Center=true,Outline=true,Font=2,Visible=false})
     d.CheaterText       = MkDraw("Text",{Size=11,Center=true,Outline=true,Font=2,Visible=false,Color=Color3.fromRGB(255,60,60)})
-    d.DistanceText      = MkDraw("Text",{Size=7,Center=true,Outline=true,Font=2,Visible=false,Transparency=0.15})
-    d.WeaponText        = MkDraw("Text",{Size=7,Center=true,Outline=true,Font=2,Visible=false,Transparency=0.15})
-    d.ClassText         = MkDraw("Text",{Size=7,Center=true,Outline=true,Font=2,Visible=false,Transparency=0.15})
+    d.DistanceText      = MkDraw("Text",{Size=7,Center=true,Outline=true,Font=2,Visible=false,Transparency=0.35})
+    d.WeaponText        = MkDraw("Text",{Size=7,Center=true,Outline=true,Font=2,Visible=false,Transparency=0.35})
+    d.ClassText         = MkDraw("Text",{Size=7,Center=true,Outline=true,Font=2,Visible=false,Transparency=0.35})
     d.HealthText        = MkDraw("Text",{Size=11,Center=false,Outline=true,Font=2,Visible=false})
     d.HealthPercentText = MkDraw("Text",{Size=11,Center=false,Outline=true,Font=2,Visible=false})
     d.SightLine         = MkDraw("Line",{Thickness=1,Color=Color3.new(1,0,0),Visible=false})
@@ -1986,24 +2018,69 @@ end
 ------------------------------------------------------------
 -- GUN MOD HELPERS
 ------------------------------------------------------------
-local _infAmmoConn1, _infAmmoConn2
+local _infUseAmmoConns   = {}  -- list of connections (multi-slot)
+local _infReserveAmmoConns = {}
 
-local function SetupInfiniteAmmo(enabled)
-    if _infAmmoConn1 then _infAmmoConn1:Disconnect(); _infAmmoConn1 = nil end
-    if _infAmmoConn2 then _infAmmoConn2:Disconnect(); _infAmmoConn2 = nil end
+-- "Use ammo" = clip that decrements on fire. ammocount = primary, ammocount2 = secondary
+local function SetupInfiniteUseAmmo(enabled)
+    for _, c in ipairs(_infUseAmmoConns) do pcall(function() c:Disconnect() end) end
+    _infUseAmmoConns = {}
     if not enabled then return end
     pcall(function()
-        local L = LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables
-        _infAmmoConn1 = L.ammocount:GetPropertyChangedSignal("Value"):Connect(function()
-            if not (Toggles.InfiniteAmmo and Toggles.InfiniteAmmo.Value) then return end
-            local wep = ReplicatedStorage.Weapons:FindFirstChild(L.primary.Value)
-            if wep and wep:FindFirstChild("Ammo") then L.ammocount.Value = wep.Ammo.Value end
-        end)
-        _infAmmoConn2 = L.ammocount2:GetPropertyChangedSignal("Value"):Connect(function()
-            if not (Toggles.InfiniteAmmo and Toggles.InfiniteAmmo.Value) then return end
-            local wep = ReplicatedStorage.Weapons:FindFirstChild(L.secondary.Value)
-            if wep and wep:FindFirstChild("Ammo") then L.ammocount2.Value = wep.Ammo.Value end
-        end)
+        local L    = LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables
+        local slots = (Options.InfUseAmmoSlot and Options.InfUseAmmoSlot.Value) or {Primary=true}
+        local pairs2 = {
+            Primary   = {ctr="ammocount",  wpn="primary"},
+            Secondary = {ctr="ammocount2", wpn="secondary"},
+        }
+        for slotName in pairs(slots) do
+            local p = pairs2[slotName]; if not p then continue end
+            local ctr  = L:FindFirstChild(p.ctr)
+            local wpnV = L:FindFirstChild(p.wpn)
+            if not (ctr and wpnV) then continue end
+            local lastVal = ctr.Value
+            local conn = ctr:GetPropertyChangedSignal("Value"):Connect(function()
+                if not (Toggles.InfUseAmmo and Toggles.InfUseAmmo.Value) then return end
+                if ctr.Value >= lastVal then lastVal = ctr.Value; return end
+                lastVal = ctr.Value
+                local wep = ReplicatedStorage.Weapons:FindFirstChild(wpnV.Value)
+                if wep and wep:FindFirstChild("Ammo") then ctr.Value = wep.Ammo.Value end
+            end)
+            table.insert(_infUseAmmoConns, conn)
+        end
+    end)
+end
+
+-- "Reserve ammo" = stored/backup ammo pool. TC2 uses primarystored / secondarystored (also tries ammocount2 variants)
+local function SetupInfiniteReserveAmmo(enabled)
+    for _, c in ipairs(_infReserveAmmoConns) do pcall(function() c:Disconnect() end) end
+    _infReserveAmmoConns = {}
+    if not enabled then return end
+    pcall(function()
+        local L    = LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables
+        local slots = (Options.InfReserveAmmoSlot and Options.InfReserveAmmoSlot.Value) or {Primary=true}
+        local candidateMap = {
+            Primary   = {"primarystored","primary_stored","ammostore","ammocount4"},
+            Secondary = {"secondarystored","secondary_stored","ammostore2","ammocount3"},
+        }
+        local wpnMap = { Primary="primary", Secondary="secondary" }
+        for slotName in pairs(slots) do
+            local wpnV = L:FindFirstChild(wpnMap[slotName] or "primary")
+            local ctr
+            for _, name in ipairs(candidateMap[slotName] or {}) do
+                local v = L:FindFirstChild(name); if v then ctr = v; break end
+            end
+            if not ctr then warn("[Aegis] reserve ammo var not found for " .. tostring(slotName)); continue end
+            local lastVal = ctr.Value
+            local conn = ctr:GetPropertyChangedSignal("Value"):Connect(function()
+                if not (Toggles.InfReserveAmmo and Toggles.InfReserveAmmo.Value) then return end
+                if ctr.Value >= lastVal then lastVal = ctr.Value; return end
+                lastVal = ctr.Value
+                local wep = wpnV and ReplicatedStorage.Weapons:FindFirstChild(wpnV.Value)
+                if wep and wep:FindFirstChild("Ammo") then ctr.Value = wep.Ammo.Value end
+            end)
+            table.insert(_infReserveAmmoConns, conn)
+        end
     end)
 end
 
@@ -2045,6 +2122,21 @@ local function SetAutomatic(enabled)
     end)
 end
 
+local function SetMaxRange(enabled)
+    pcall(function()
+        for _, wep in pairs(ReplicatedStorage.Weapons:GetChildren()) do
+            local rng = wep:FindFirstChild("Range")
+            if rng then
+                if enabled then
+                    rng.Value = 9e9
+                elseif WeaponSnapshot[wep.Name] and WeaponSnapshot[wep.Name].Range then
+                    rng.Value = WeaponSnapshot[wep.Name].Range
+                end
+            end
+        end
+    end)
+end
+
 ------------------------------------------------------------
 -- BHOP
 ------------------------------------------------------------
@@ -2079,11 +2171,11 @@ end)
 ------------------------------------------------------------
 do
     local SG = Tabs.Aimbot:AddLeftGroupbox("Silent Aim", "crosshair")
-    SG:AddToggle("SilentAimToggle", { Text="Enable Silent Aim", Default=false })
+    SG:AddToggle("SilentAimToggle", { Text="Silent Aim", Default=false })
     Toggles.SilentAimToggle:OnChanged(function() Config.SilentAim.Enabled = Toggles.SilentAimToggle.Value end)
     SG:AddLabel("Aim Key"):AddKeyPicker("SilentAimKey", { Default="None", Mode="Hold", Text="Aim Key" })
-    SG:AddToggle("AutoShoot",     { Text="Auto Shoot (while aiming)", Default=false })
-    SG:AddToggle("SilentAimMobile", { Text="Mobile Mode (Always On)", Default=false })
+    SG:AddToggle("AutoShoot",     { Text="Auto Shoot", Default=false })
+    SG:AddToggle("SilentAimMobile", { Text="Always On", Default=false })
     Toggles.SilentAimMobile:OnChanged(function()
         if Options.SilentAimKey then Options.SilentAimKey.Mode = Toggles.SilentAimMobile.Value and "Always" or "Hold" end
     end)
@@ -2102,20 +2194,17 @@ do
 end
 
 do
-    local PI = Tabs.Aimbot:AddLeftGroupbox("Prediction Indicator", "activity")
+    local PI = Tabs.Aimbot:AddRightGroupbox("Prediction Indicator", "activity")
     PI:AddToggle("ShowPredictionIndicator", { Text="Show Prediction Indicator", Default=false })
-    PI:AddDropdown("PredictionIndicatorSymbol", { Values={"+","*","•","×"}, Default="+", Text="Symbol" })
+    PI:AddDropdown("PredictionIndicatorSymbol", { Values={"+"}, Default="+", Text="Symbol" })
     PI:AddLabel("Indicator Color"):AddColorPicker("PredictionIndicatorColor", { Default=Color3.new(0,1,1), Title="Indicator Color" })
+    PI:AddDivider()
+    PI:AddToggle("ShowProjectilePath", { Text="Show Projectile Path", Default=false,
+        Tooltip="im gonna add the prediction logic to it soon trust" })
+    PI:AddLabel("Path Color"):AddColorPicker("ProjectilePathColor", { Default=Color3.fromRGB(255,180,0), Title="Path Color" })
+    PI:AddSlider("ProjectilePathThickness", { Text="Path Thickness", Default=1.5, Min=0.5, Max=5, Rounding=1 })
 end
 
-do
-    local NG = Tabs.Aimbot:AddLeftGroupbox("Notifications", "bell")
-    NG:AddToggle("ShowHits",       { Text="Show Hits",    Default=false, Callback=function(v) Config.Notifications.ShowHits=v end })
-    NG:AddToggle("EnableFlags",    { Text="Hit Flags",    Default=false, Callback=function(v) Config.Flags.Enabled=v end })
-    NG:AddToggle("ShowDamage",     { Text="Show Damage",  Default=false, Callback=function(v) Config.Flags.ShowDamage=v end })
-    NG:AddToggle("ShowRemainingHp",{ Text="Remaining HP", Default=false, Callback=function(v) Config.Flags.ShowRemainingHealth=v end })
-    NG:AddToggle("ShowHitName",    { Text="Show Name",    Default=false, Callback=function(v) Config.Flags.ShowName=v end })
-end
 
 ------------------------------------------------------------
 -- UI — VISUALS TAB
@@ -2311,7 +2400,7 @@ end
 do
     local ML = Tabs.Misc:AddLeftGroupbox("Misc", "wrench")
     ML:AddToggle("AegisStatus", { Text="Aegis Status", Default=false,
-        Tooltip="Makes you visible to other Aegis users, even those with this option off." })
+        Tooltip="Makes you visible to other Aegis users, even those with this option off. [BROKEN]" })
     Toggles.AegisStatus:OnChanged(function(v)
         if v then StampAegisCharacter(LocalPlayer.Character)
         else pcall(function() LocalPlayer.Character:SetAttribute(AEGIS_ATTR, nil) end) end
@@ -2328,12 +2417,12 @@ do
     ML:AddDivider()
     -- Backstab / Melee
     ML:AddToggle("AutoBackstab",        { Text="Auto Backstab",    Default=false })
-    ML:AddToggle("BackstabIgnoreInvis", { Text="Ignore Invisible (BS)", Default=true })
+    ML:AddToggle("BackstabIgnoreInvis", { Text="Ignore Invisible", Default=true })
     ML:AddToggle("AutoWarp",            { Text="Auto Warp Behind", Default=false })
     ML:AddLabel("Warp Key"):AddKeyPicker("WarpKey", { Default="None", Mode="Toggle", Text="Warp" })
     ML:AddDivider()
     ML:AddToggle("AutoMelee",        { Text="Auto Melee",            Default=false })
-    ML:AddToggle("MeleeIgnoreInvis", { Text="Ignore Invisible (Melee)", Default=true })
+    ML:AddToggle("MeleeIgnoreInvis", { Text="Ignore Invisible", Default=true })
     ML:AddDropdown("AutoMeleeMode",  { Values={"Rage","Demoknight"}, Default="Rage", Text="Melee Mode" })
 end
 
@@ -2348,7 +2437,7 @@ do
     MR:AddDivider()
     -- Device Spoofer
     MR:AddToggle("DeviceSpoofEnabled", { Text="Device Spoofer", Default=false,
-        Tooltip="Client side only — does not affect server-side platform checks." })
+        Tooltip="Client side only" })
     MR:AddDropdown("DeviceSpoofer", { Values={"Desktop","Mobile","Xbox","Tablet"}, Default="Desktop", Text="Platform" })
     Toggles.DeviceSpoofEnabled:OnChanged(function(v)
         if v then
@@ -2373,12 +2462,12 @@ do
     local MA = Tabs.Misc:AddRightGroupbox("Automation", "cpu")
     MA:AddToggle("AutoStickyDetonate",  { Text="Auto Sticky Detonate", Default=false,
         Tooltip="Buggy" })
-    MA:AddToggle("AutoStickyVisibleOnly",{ Text="Visible Only (Sticky)", Default=false })
+    MA:AddToggle("AutoStickyVisibleOnly",{ Text="Visible Only", Default=false })
     MA:AddDivider()
     MA:AddToggle("AutoAirblast",    { Text="Auto Airblast",        Default=false })
     MA:AddToggle("AutoAirblastExt", { Text="Extinguish Teammates", Default=false })
     MA:AddDivider()
-    MA:AddToggle("AutoUberToggle", { Text="Auto Uber [Doctor]", Default=false })
+    MA:AddToggle("AutoUberToggle", { Text="Auto Uber", Default=false })
     Toggles.AutoUberToggle:OnChanged(function() Config.AutoUber.Enabled = Toggles.AutoUberToggle.Value end)
     MA:AddSlider("AutoUberHealthPercent", { Text="Health Threshold", Default=40, Min=5, Max=100, Rounding=0, Suffix="%" })
     Options.AutoUberHealthPercent:OnChanged(function() Config.AutoUber.HealthPercent = Options.AutoUberHealthPercent.Value end)
@@ -2421,7 +2510,7 @@ do
         Config.Speed.Enable = Toggles.SpeedToggle.Value; SetupSpeed()
         if not Toggles.SpeedToggle.Value and S.speedConnection then S.speedConnection:Disconnect(); S.speedConnection=nil end
     end)
-    EL:AddSlider("SpeedValue", { Text="Speed Value", Default=300, Min=1, Max=600, Rounding=0,
+    EL:AddSlider("SpeedValue", { Text="Speed Value", Default=300, Min=1, Max=400, Rounding=0,
         Callback=function(v) Config.Speed.Value=v; if Config.Speed.Enable and LocalPlayer.Character then LocalPlayer.Character:SetAttribute("Speed",v) end end })
 end
 
@@ -2433,21 +2522,41 @@ end
 
 do
     local GM = Tabs.Exploits:AddRightGroupbox("Gun Mods", "package")
-    GM:AddToggle("InfiniteAmmo", { Text="Infinite Ammo", Default=false,
-        Callback=function(v) SetupInfiniteAmmo(v) end })
+    -- Infinite Use Ammo (clip/magazine that decrements when firing)
+    GM:AddToggle("InfUseAmmo", { Text="Infinite Use Ammo", Default=false,
+        Tooltip="Resets clip to max whenever it decreases. Use dropdown to choose which slot(s).",
+        Callback=function(v) SetupInfiniteUseAmmo(v) end })
+    GM:AddDropdown("InfUseAmmoSlot", { Values={"Primary","Secondary"}, Default=1, Multi=true, Text="Use Ammo Slot" })
+    Options.InfUseAmmoSlot:SetValue({ Primary=true })
+    Options.InfUseAmmoSlot:OnChanged(function()
+        if Toggles.InfUseAmmo and Toggles.InfUseAmmo.Value then SetupInfiniteUseAmmo(true) end
+    end)
+    GM:AddDivider()
+    -- Infinite Reserve Ammo (stored/backup pool)
+    GM:AddToggle("InfReserveAmmo", { Text="Infinite Reserve Ammo", Default=false,
+        Tooltip="Resets stored reserve whenever it decreases. Use dropdown to choose which slot(s).",
+        Callback=function(v) SetupInfiniteReserveAmmo(v) end })
+    GM:AddDropdown("InfReserveAmmoSlot", { Values={"Primary","Secondary"}, Default=1, Multi=true, Text="Reserve Ammo Slot" })
+    Options.InfReserveAmmoSlot:SetValue({ Primary=true })
+    Options.InfReserveAmmoSlot:OnChanged(function()
+        if Toggles.InfReserveAmmo and Toggles.InfReserveAmmo.Value then SetupInfiniteReserveAmmo(true) end
+    end)
     GM:AddDivider()
     GM:AddToggle("FastGun", { Text="Fast Gun", Default=false,
         Callback=function(v)
             if v then SetFireRateMultiplier(Options.FireRateMultiplier.Value)
             else RestoreFireRate() end
         end })
-    GM:AddSlider("FireRateMultiplier", { Text="Fire Rate", Default=1, Min=1, Max=1000, Rounding=1, Suffix="x",
+    GM:AddSlider("FireRateMultiplier", { Text="Fire Rate", Default=1, Min=1, Max=25, Rounding=1, Suffix="x",
         Callback=function(v)
             if Toggles.FastGun and Toggles.FastGun.Value then SetFireRateMultiplier(v) end
         end })
     GM:AddDivider()
     GM:AddToggle("AutomaticToggle", { Text="Automatic", Default=false,
         Callback=function(v) SetAutomatic(v) end })
+    GM:AddToggle("MaxRangeToggle", { Text="hitscan melee", Default=false,
+        Tooltip="thank skibidisigmaboy89",
+        Callback=function(v) SetMaxRange(v) end })
 end
 
 task.spawn(function() while true do task.wait(2); if Library.Unloaded then break end
@@ -2702,6 +2811,81 @@ local function RunAutoSticky(playerData)
     end
 end
 
+------------------------------------------------------------
+-- PROJECTILE PATH VISUALIZATION
+------------------------------------------------------------
+local function HidePathLines(fromIdx)
+    for i = (fromIdx or 1), PATH_POOL_SIZE do
+        PathLines[i].Visible = false
+    end
+end
+
+local function RunProjectilePath()
+    if not (Toggles.ShowProjectilePath and Toggles.ShowProjectilePath.Value and Config.SilentAim.Enabled and S.silentAimKeyActive) then
+        HidePathLines(); return
+    end
+    local weapon = GetLocalWeapon()
+    local pd     = ProjectileWeapons[weapon] or ChargeWeapons[weapon]
+    if not pd then HidePathLines(); return end
+
+    local target    = FrameCache.silentTarget
+    local targetPlr = FrameCache.silentTargetPlr
+    if not target or not targetPlr then HidePathLines(); return end
+
+    local speed, gravity, initAngle, _, lifetime = GetCurrentWeaponSpeed(weapon)
+    if not speed then HidePathLines(); return end
+
+    local origin  = (Camera.CFrame * CFrame.new(PROJECTILE_OFFSET)).Position
+    local targetPos = target.Position
+
+    -- determine aim direction (with arc compensation)
+    local aimPoint = gravity > 0 and CalculateAimPoint(origin, targetPos, speed, gravity, weapon) or targetPos
+    local aimDir   = (aimPoint - origin)
+    if aimDir.Magnitude < 0.1 then HidePathLines(); return end
+    aimDir = aimDir.Unit
+
+    local hDir = Vector3.new(aimDir.X, 0, aimDir.Z)
+    if hDir.Magnitude < 0.01 then HidePathLines(); return end
+    hDir = hDir.Unit
+
+    local pitch      = math.asin(math.clamp(aimDir.Y, -1, 1))
+    local totalAngle = pitch + math.rad(initAngle or 0)
+    local hSpeed     = speed * math.cos(totalAngle)
+    local vSpeed     = speed * math.sin(totalAngle)
+
+    local hDist   = Vector3.new(targetPos.X-origin.X, 0, targetPos.Z-origin.Z).Magnitude
+    local totalTime = math.min(hDist / math.max(hSpeed, 1), lifetime or 99)
+
+    local steps = PATH_POOL_SIZE  -- one segment per pool line
+    local col   = Options.ProjectilePathColor and Options.ProjectilePathColor.Value or Color3.fromRGB(255,180,0)
+    local thick = Options.ProjectilePathThickness and Options.ProjectilePathThickness.Value or 1.5
+
+    local prevSP, prevOnScreen
+    local usedLines = 0
+
+    for i = 0, steps do
+        local t    = (i / steps) * totalTime
+        local hPos = origin + hDir * (hSpeed * t)
+        local yPos = origin.Y + vSpeed * t - 0.5 * (gravity or 0) * t * t
+        local worldPt = Vector3.new(hPos.X, yPos, hPos.Z)
+        local sp, onScreen = WorldToViewportPoint(worldPt)
+
+        if prevSP and i > 0 then
+            usedLines = usedLines + 1
+            if usedLines <= PATH_POOL_SIZE then
+                local ln = PathLines[usedLines]
+                local vis = prevOnScreen or onScreen
+                ln.From = prevSP; ln.To = sp
+                ln.Color = col; ln.Thickness = thick
+                ln.Visible = vis
+            end
+        end
+        prevSP = sp; prevOnScreen = onScreen
+    end
+
+    HidePathLines(usedLines + 1)
+end
+
 local function RunPredictionIndicator()
     if not (Toggles.ShowPredictionIndicator and Toggles.ShowPredictionIndicator.Value and Config.SilentAim.Enabled and S.silentAimKeyActive) then
         PredictionIndicator.Visible = false; return
@@ -2739,7 +2923,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
 end)
 
 ------------------------------------------------------------
--- HIT TRACKING
+-- HIT TRACKING (health cache only — notification UI removed)
 ------------------------------------------------------------
 do
     local function TrackCharacter(plr)
@@ -2748,21 +2932,6 @@ do
         local hum  = char:FindFirstChildOfClass("Humanoid"); if not hum then return end
         healthCache[plr] = hum.Health
         hum.HealthChanged:Connect(function(newHealth)
-            if not Config.Flags.Enabled then return end
-            local old = healthCache[plr]; if not old then healthCache[plr]=newHealth; return end
-            if newHealth < old then
-                local dmg = math.floor(old-newHealth); local rem = math.floor(newHealth)
-                if dmg > 0 and dmg < 200 and Config.Notifications.ShowHits then
-                    local ct = tick()
-                    if ct-S.lastHitTime > S.hitCooldown then
-                        local msg = ""
-                        if Config.Flags.ShowName            then msg=msg..plr.Name end
-                        if Config.Flags.ShowDamage          then msg=msg..(msg~="" and " | " or "")..string.format("-%d HP",dmg) end
-                        if Config.Flags.ShowRemainingHealth then msg=msg..(msg~="" and " | " or "")..string.format("%d HP left",rem) end
-                        if msg ~= "" then Notify(msg, 2) end; S.lastHitTime=ct
-                    end
-                end
-            end
             healthCache[plr] = newHealth
         end)
     end
@@ -2891,6 +3060,7 @@ local MainConnection = RunService.RenderStepped:Connect(function(dt)
         FOVCircle.Color    = Options.FOVColor.Value;   FOVCircle.Visible = true
     else FOVCircle.Visible = false end
 
+    RunProjectilePath()
     RunPredictionIndicator()
 
     -- Player ESP & Chams
@@ -2972,11 +3142,24 @@ end)
 -- FPS COUNTER & WATERMARK
 ------------------------------------------------------------
 task.spawn(function() while true do task.wait(1); if Library.Unloaded then break end; S.fps=S.frames; S.frames=0 end end)
+
+local _WatermarkLabel = nil
+pcall(function()
+    _WatermarkLabel = Library:AddDraggableLabel("Aegis.dev / 0 fps / 0 ms")
+end)
+
 task.spawn(function() while true do task.wait(1); if Library.Unloaded then break end
     local ping=0; pcall(function() ping=math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
-    Library:SetWatermark(("Aegis.dev / %d fps / %d ms"):format(S.fps, ping))
+    local wText = ("Aegis.dev / %d fps / %d ms"):format(S.fps, ping)
+    pcall(function()
+        if _WatermarkLabel then
+            _WatermarkLabel:SetText(wText)
+        else
+            Library:SetWatermark(wText)
+        end
+    end)
 end end)
-Library:SetWatermarkVisibility(true)
+pcall(function() Library:SetWatermarkVisibility(true) end)
 
 ------------------------------------------------------------
 -- CLEANUP
@@ -3028,12 +3211,14 @@ Library:OnUnload(function()
     for i in pairs(WorldChamsCache)  do pcall(function() WorldChamsCache[i]:Destroy() end) end
     for i in pairs(ProjectileChamsCache) do pcall(function() ProjectileChamsCache[i]:Destroy() end) end
     FOVCircle:Remove(); pcall(function() PredictionIndicator:Remove() end)
+    for _, ln in ipairs(PathLines) do pcall(function() ln:Remove() end) end
     DestroyMobileButton()
     if OL then
         Lighting.Ambient=OL.Ambient; Lighting.Brightness=OL.Brightness; Lighting.FogEnd=OL.FogEnd
         Lighting.FogStart=OL.FogStart; Lighting.ClockTime=OL.ClockTime; Lighting.OutdoorAmbient=OL.OutdoorAmbient
     end
     if S.speedConnection then S.speedConnection:Disconnect() end
+    pcall(function() if Toggles.MaxRangeToggle and Toggles.MaxRangeToggle.Value then SetMaxRange(false) end end)
     MainConnection:Disconnect()
     if S.shooting then VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0); S.shooting=false end
     playerPositionHistory={}
