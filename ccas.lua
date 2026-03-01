@@ -2013,7 +2013,7 @@ local function SetFireRateMultiplier(mult)
             local fr = wep:FindFirstChild("FireRate")
             if fr and WeaponSnapshot[wep.Name] and WeaponSnapshot[wep.Name].FireRate then
                 local orig = WeaponSnapshot[wep.Name].FireRate
-                fr.Value = wep:FindFirstChild("Projectile") and math.clamp(orig / mult, 0.1, 9e9) or (orig / mult)
+                fr.Value = wep:FindFirstChild("Projectile") and math.clamp(orig / mult, 0.0001, 9e9) or (orig / mult)
             end
         end
     end)
