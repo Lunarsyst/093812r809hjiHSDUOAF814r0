@@ -1,13 +1,20 @@
 -- Aegis | Typical Colors 2
 -- Obsidian UI Library
 
---  p check
+
+-- PLACE CHECK
+
 if game.PlaceId ~= 328028363 then
     game:GetService("Players").LocalPlayer:Kick("[Aegis] join tc2 diddyblud")
     return
 end
 
 if setthreadidentity then setthreadidentity(8) end
+
+
+-- ANTICHEAT BYPASS (getreg thread cancellation)
+-- Enumerates all live coroutines via getreg(), cancels any
+-- threads sourced from NewLoader. Expects exactly 3.
 
 do
     local _RS  = game:GetService("RunService")
@@ -41,6 +48,9 @@ do
 end
 
 
+
+-- LIBRARY
+
 local repo        = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local Library     = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
@@ -50,6 +60,12 @@ local Options = Library.Options
 local Toggles = Library.Toggles
 
 Library.ShowToggleFrameInKeybinds = true
+
+
+-- CHEATER LIST (external loadstring)
+-- The linked script should set:
+--   getgenv().AegisCheaterList = { [userId] = "DisplayName", ... }
+-- If the link hasn't been set yet, this is a no-op.
 
 do
     local CHEATER_LIST_URL = "https://raw.githubusercontent.com/Lunarsyst/-3197-541/refs/heads/main/21398?token=GHSAT0AAAAAADWRVML2IKRWVD3EOHTPZ4662NCAY6A"
@@ -65,6 +81,8 @@ local function IsCheater(player)
 end
 
 
+-- SERVICES
+
 local Players            = game:GetService("Players")
 local RunService         = game:GetService("RunService")
 local UserInputService   = game:GetService("UserInputService")
@@ -75,6 +93,8 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 local Stats              = game:GetService("Stats")
 local LogService         = game:GetService("LogService")
 
+
+-- WEAPONS MODULE (firebullet)
 
 local WeaponsModule = nil
 task.spawn(function()
@@ -93,6 +113,8 @@ local function FireShot()
     end
 end
 
+
+-- WEAPON VALUE SNAPSHOT (for Gun Mod restores)
 
 local WeaponSnapshot = {}
 task.spawn(function()
@@ -115,9 +137,9 @@ local LocalPlayer = Players.LocalPlayer
 
 local isMobileDevice = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
-------------------------------------------------------------
+
 -- AEGIS STATUS (attribute handshake)
-------------------------------------------------------------
+
 local AEGIS_ATTR = "_rbxint"
 local AegisUserCache = {}  -- [player] = true
 
@@ -127,7 +149,9 @@ local function StampAegisCharacter(char)
 end
 local isMobileMode   = false
 
--- mhe tak tak tak tak constant
+
+-- CONSTANTS
+
 local BACKSTAB_RANGE         = 7.8
 local MELEE_RANGE_RAGE       = 7.8
 local MELEE_RANGE_DEMOKNIGHT = 9
@@ -136,6 +160,9 @@ local TC2_JUMP_POWER         = 16
 local PROJECTILE_OFFSET      = Vector3.new(0.32, -0.14, -0.56)
 local SIM_PARAMS_CACHE_TTL   = 0.5
 
+
+-- CACHED PLAYER LIST
+-- Rebuilt only on join/leave, never per-frame
 
 local cachedPlayerList = {}
 do
@@ -151,8 +178,10 @@ do
 end
 
 
+-- STATE
+
 local S = {
-    charlieKirk = false, -- haha get it charlie kirk shooting
+    charlieKirk = false,
     shooting = false, lastShotTime = 0, shotInterval = 0.033,
     lastHitTime = 0, hitCooldown = 0.1,
     jitterDir = 1, spinAngle = 0, lastJitterUpdate = 0,
@@ -187,8 +216,9 @@ local cachedDispensers   = {}
 local cachedTeleporters  = {}
 local cachedAmmo         = {}
 local cachedHP           = {}
-local PlayerChamsCache   = {}
-local lastChamsProps     = {} 
+-- Chams cache keyed on player (not char) so respawns don't cause stale entries
+local PlayerChamsCache   = {}  -- [player] = { hl=Highlight, char=Model }
+local lastChamsProps     = {}  -- [player] = { fc, oc, ft, ot, dm }
 local WorldChamsCache    = {}
 local ProjectileChamsCache = {}
 
@@ -200,6 +230,9 @@ local FrameCache = {
     frameNum = 0,
     lastPredictedPos = nil,
 }
+
+
+-- FREECAM DUMMY
 
 task.spawn(function()
     local function EnsureFreecamDummy()
@@ -215,6 +248,8 @@ task.spawn(function()
     while true do task.wait(5); if Library.Unloaded then break end; EnsureFreecamDummy() end
 end)
 
+
+-- GUI LOADER
 
 local function EnsureGUILoaded()
     if S._guiLoaded then return true end
@@ -239,7 +274,9 @@ local function RightClick()
     end)
 end
 
--- skid 100, the mainframe.. heh.
+
+-- DATA TABLES
+
 local HitboxTables = {
     Head  = {"Head","HeadHB"},
     Chest = {"UpperTorso","HumanoidRootPart"},
@@ -258,7 +295,7 @@ local SkeletonConnections = {
 }
 
 local ProjectileWeapons = {
-    ["Direct Hit"]       = {Speed=120, Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Direct Hit"]       = {Speed=123.75, Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
     ["Maverick"]         = {Speed=64.75,  Gravity=15,   InitialAngle=0,    Lifetime=99,  Type="Rocket"},
     ["Rocket Launcher"]  = {Speed=64.75,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
     ["Double Trouble"]   = {Speed=64.75,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
@@ -281,7 +318,7 @@ local ProjectileWeapons = {
     ["Rescue Ranger"]    = {Speed=150,    Gravity=3,    InitialAngle=0,    Lifetime=99,  Type="Syringe"},
     ["Apollo"]           = {Speed=125,    Gravity=3,    InitialAngle=0,    Lifetime=99,  Type="Syringe"},
     ["Big Bite"]         = {Speed=64.75,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["Night Sky Ignitor"]= {Speed=120, Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Night Sky Ignitor"]= {Speed=123.75, Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
     ["Twin-Turbolence"]  = {Speed=76,     Gravity=42.6, InitialAngle=7.92, Lifetime=0.8, Type="Grenade"},
 }
 
@@ -319,6 +356,7 @@ local MeleeWeapons = {
 }
 
 local BlacklistedWeapons = {
+    ["None"]=true,
     ["Sticky Jumper"]=true,["Rocket Jumper"]=true,["Overdrive"]=true,
     ["The Mercy Kill"]=true,["Friendly Fire Foiler"]=true,
     ["Buff Banner"]=true,["Battalion's Backup"]=true,["Concheror"]=true,
@@ -335,7 +373,7 @@ local projectileNames = {
     "Arrow","Flare Gun","Baseball","Snowballs","Milk Pistol",
 }
 
--- taste the "Rainbow"
+-- Rainbow color helper for Ubercharged status
 local function GetRainbowColor()
     local t = tick() * 1.5  -- speed
     local h = t % 1
@@ -352,7 +390,8 @@ local function GetRainbowColor()
     return Color3.new(r,g,b)
 end
 
-
+-- Status effects from workspace.PlayerName.Conditions attributes
+-- Matches exactly what TC2 uses (confirmed via screenshot)
 local StatusLetters = {
     Bleeding    = {Letter="B",   Color=Color3.fromRGB(255,50,50)},
     Cloaked     = {Letter="C",   Color=Color3.fromRGB(150,150,255)},
@@ -361,11 +400,13 @@ local StatusLetters = {
     Lemoned     = {Letter="L",   Color=Color3.fromRGB(255,255,0)},
     Milked      = {Letter="M",   Color=Color3.fromRGB(230,230,230)},
     Poisoned    = {Letter="P",   Color=Color3.fromRGB(100,200,50)},
-    Ubercharged = {Letter="U",   Color=Color3.fromRGB(255,215,0)}, -- mhe tak tak god im such a faggot
+    Ubercharged = {Letter="U",   Color=Color3.fromRGB(255,215,0)},
     ADS         = {Letter="ADS", Color=Color3.fromRGB(200,200,200)},
 }
 
--- cfg
+
+-- CONFIG
+
 getgenv().Config = {
     SilentAim     = {Enabled=false, FOV=200},
     AntiAim       = {Enabled=false, Mode="jitter", JitterAngle=90, JitterSpeed=15, AntiAimSpeed=180},
@@ -384,9 +425,12 @@ local function GetWeaponType(weapon)
     return "Hitscan"
 end
 
+
+-- WINDOW & TABS
+
 local Window = Library:CreateWindow({
     Title = "Aegis",
-    Footer = "aegis.dev | discord.gg/qvW87kbbKZ",
+    Footer = "aegis.dev | hi guys am fortnite",
     NotifySide = "Right",
     ShowCustomCursor = true,
 })
@@ -400,11 +444,15 @@ local Tabs = {
     ["UI Settings"] = Window:AddTab("UI",     "settings"),
 }
 
--- notification header ting ting
+
+-- NOTIFY HELPER
+
 local function Notify(msg, duration)
     Library:Notify({ Title="Aegis", Description=tostring(msg), Time=duration or 3 })
 end
 
+
+-- UTILITY
 
 local function GetCharacter(p)    return p and p.Character end
 local function GetHumanoid(c)     return c and c:FindFirstChildOfClass("Humanoid") end
@@ -430,6 +478,8 @@ local function WorldToViewportPoint(pos)
 end
 
 
+-- VISIBILITY (with early-exit dot product to skip off-screen raycasts)
+
 local raycastParams = RaycastParams.new()
 raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
 raycastParams.IgnoreWater = true
@@ -437,7 +487,7 @@ raycastParams.IgnoreWater = true
 local function IsPartVisible(part)
     if not part then return false end
     if visibilityCache[part] ~= nil then return visibilityCache[part] end
-    -- -100 degrees lol
+    -- Skip raycast entirely if part is behind camera (~100° off screen)
     local toDir = part.Position - FrameCache.camPos
     if toDir.Magnitude > 0.1 and FrameCache.camCF.LookVector:Dot(toDir.Unit) < -0.17 then
         visibilityCache[part] = false; return false
@@ -459,7 +509,9 @@ local function IsCharacterInvisible(char)
     return head and head.Transparency > 0.9
 end
 
--- reach check
+
+-- REACH CHECK (used by melee/backstab to verify LOS)
+
 local function HasLineOfSight(fromPos, toPos)
     local rp = RaycastParams.new()
     rp.FilterType = Enum.RaycastFilterType.Blacklist
@@ -471,12 +523,14 @@ local function HasLineOfSight(fromPos, toPos)
     return not hit or (hit.Position - fromPos).Magnitude >= dir.Magnitude - 1
 end
 
--- get visible pawrt..
+
+-- GetBestVisiblePart (fixed — no fallback, sort from dropdown)
+
 local function GetBestVisiblePart(char, selectedGroups, sortMode)
     if not char or char == LocalPlayer.Character then return nil end
     sortMode = sortMode or "Closest to Mouse"
 
-    local skipVisCheck = wallbangActive and GetWeaponType(GetLocalWeapon()) == "Hitscan"
+    local skipVisCheck = wallbangActive and GetCurrentProfileType() ~= "Projectile" and GetCurrentProfileType() ~= "Melee"
 
     local candidates = {}
     for _, groupName in ipairs({"Head","Chest","Torso","Arms","Legs","Feet"}) do
@@ -510,13 +564,15 @@ local function GetBestVisiblePart(char, selectedGroups, sortMode)
 end
 
 
+-- PLAYER INFO HELPERS
+
 local function GetPlayerClass(p)
     local st = p:FindFirstChild("Status")
     if st then local c = st:FindFirstChild("Class"); if c then return tostring(c.Value) end end
     return "Unknown"
 end
 
--- fallback to humanoid MaxHealth
+-- Read MaxHealth directly from workspace character, fallback to humanoid MaxHealth
 local function GetPlayerMaxHP(player)
     local ok, val = pcall(function()
         return Workspace[player.Name].MaxHealth.Value
@@ -538,11 +594,28 @@ end
 
 local function GetLocalWeapon()  return GetPlayerWeapon(GetLocalCharacter()) end
 
--- returns the SA option/toggle keys for the currently equipped weapon type
--- must be defined after GetLocalWeapon and GetWeaponType
-local function GetActiveSAProfile()
+-- Returns the profile key for the current weapon:
+--   "Projectile" if weapon is a projectile type
+--   "Melee"      if weapon is melee OR equipped slot is melee
+--   "Primary"    if equipped slot is primary (and weapon is hitscan/unknown)
+--   "Secondary"  otherwise
+local function GetCurrentProfileType()
     local wtype = GetWeaponType(GetLocalWeapon())
-    if wtype == "Unknown" or wtype == "Other" then wtype = "Hitscan" end
+    if wtype == "Projectile" then return "Projectile" end
+    if wtype == "Melee" then return "Melee" end
+    -- hitscan/unknown: fall back to slot
+    if S.equipped then
+        local v = tostring(S.equipped.Value):lower()
+        if v == "melee"   then return "Melee"
+        elseif v == "primary" then return "Primary"
+        end
+    end
+    return "Secondary"
+end
+
+-- Returns the SA option/toggle keys for the current profile
+local function GetActiveSAProfile()
+    local wtype = GetCurrentProfileType()
     return {
         enabled    = "SA_Enabled_"..wtype,
         key        = "SA_Key_"..wtype,
@@ -634,7 +707,9 @@ local function IsSyringeWeapon(weapon)
     return weapon == "Syringe Crossbow" or weapon == "Apollo"
 end
 
--- sim ray p
+
+-- SIM RAY PARAMS (cached TTL, using cachedPlayerList)
+
 local function GetSimRayParams()
     local now = tick()
     if S.simRayParamsCache and (now - S.simRayParamsCacheTime) < SIM_PARAMS_CACHE_TTL then
@@ -652,7 +727,9 @@ local function GetSimRayParams()
     return rp
 end
 
--- velo tracking
+
+-- VELOCITY TRACKING (uses cachedPlayerList)
+
 local function UpdateVelocityTracking()
     local now = tick()
     if now - S.lastVelocityUpdate < 0.03 then return end
@@ -717,7 +794,9 @@ local function IsVelocityStale(player)
     return GetPlayerVelocity(player).Magnitude > 10 and (recent.Pos - older.Pos).Magnitude < 2
 end
 
--- thanks chat bbg
+
+-- MOVEMENT SIMULATION
+
 local function SimTraceGround(position, rp)
     local result = Workspace:Raycast(position + Vector3.new(0,3,0), Vector3.new(0,-200,0), rp)
     if result then return result.Position, result.Normal end
@@ -865,7 +944,9 @@ local function SimulateTargetPosition(player, totalTime, steps, rp, wallCheck)
     return simPos
 end
 
--- objection!
+
+-- OBJECT CACHING
+
 local function RefreshObjectCaches()
     cachedSentries = {}; cachedDispensers = {}; cachedTeleporters = {}
     for _, v in pairs(Workspace:GetChildren()) do
@@ -946,6 +1027,8 @@ local function GetProjectiles()
 end
 
 
+-- CHARGE TRACKING
+
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed or Library.Unloaded then return end
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -972,7 +1055,9 @@ local function GetCurrentWeaponSpeed(weaponName)
     return nil
 end
 
--- the one, the only, projectile prediction
+
+-- PROJECTILE PREDICTION
+
 local function CalculateAimPoint(origin, targetPos, speed, gravity, weaponName)
     if gravity == 0 then return targetPos end
     local dir  = targetPos - origin
@@ -1098,6 +1183,8 @@ local function PredictProjectileHit(targetPart, player, weaponName)
 end
 
 
+-- BUILD PLAYER DATA (single WorldToViewportPoint per player)
+
 local function BuildPlayerData()
     local data  = {}
     local lc    = GetLocalCharacter(); local lhrp = lc and GetHRP(lc); if not lhrp then return data end
@@ -1128,7 +1215,9 @@ local function BuildPlayerData()
     return data
 end
 
--- silent aim target 
+
+-- SILENT AIM TARGET SELECTION
+
 local function GetSilentAimTarget(playerData)
     local prof       = GetActiveSAProfile()
     local fov        = Options[prof.fov] and Options[prof.fov].Value or 200
@@ -1207,7 +1296,9 @@ local function GetSilentAimTarget(playerData)
 end
 
 
-local ARM_HOLD_TIME   = 0.2
+-- AIM ARMS (0.5s hold, 0.3s smooth return)
+
+local ARM_HOLD_TIME   = 0.5
 local ARM_RETURN_TIME = 0.3
 
 local function AimArmsAt(targetPos)
@@ -1268,7 +1359,9 @@ local function TriggerAimArms(targetPos)
     end
 end
 
--- camera hook thanks elysium
+
+-- CAMERA HOOK
+
 local function GetProjectileAimCFrame(target, targetPlr, weapon)
     if weapon == "Huntsman" then
         local tChar = target:FindFirstAncestorOfClass("Model")
@@ -1371,6 +1464,8 @@ task.spawn(function()
 end)
 
 
+-- NAMECALL HOOK (Fall Damage intercept)
+
 local _ncOrig
 _ncOrig = hookmetamethod(game, "__namecall", function(self2, ...)
     if not Library.Unloaded then
@@ -1382,6 +1477,8 @@ _ncOrig = hookmetamethod(game, "__namecall", function(self2, ...)
     return _ncOrig(self2, ...)
 end)
 
+
+-- WALLBANG hook — __index intercept on Clips
 
 local wallbangHook = nil
 local wallbangActive = false
@@ -1408,6 +1505,8 @@ local function RemoveWallbangHook()
 end
 
 
+-- NO SPREAD
+
 local function SetupNoSpread()
     if S.noSpreadSetup or not EnsureGUILoaded() then return end
     S.noSpreadSetup = true
@@ -1417,6 +1516,8 @@ local function SetupNoSpread()
     end)
 end
 
+
+-- SPEED
 
 local function SetupSpeed()
     if S.speedConnection then S.speedConnection:Disconnect(); S.speedConnection = nil end
@@ -1430,6 +1531,8 @@ local function SetupSpeed()
     end
 end
 
+
+-- MISC
 
 local function ApplyThirdPerson(state)
     pcall(function()
@@ -1447,6 +1550,8 @@ local function ApplyDeviceSpoof(platform)
     end)
 end
 
+
+-- MOBILE BUTTON
 
 local function CreateMobileButton()
     if S.mobileToggleButton then return end
@@ -1486,6 +1591,8 @@ local function DestroyMobileButton()
 end
 
 
+-- CHARACTER RESPAWN
+
 LocalPlayer.CharacterAdded:Connect(function(char)
     task.wait(1); EnsureGUILoaded(); SetupNoSpread(); SetupSpeed()
     S.jitterDir = 1; S.spinAngle = 0; S.armTarget = nil; S.armReturning = false;
@@ -1509,6 +1616,8 @@ task.spawn(function() task.wait(2); EnsureGUILoaded(); SetupNoSpread()
     end
 end)
 
+
+-- DRAWING HELPERS
 
 local ESPObjects    = {}
 local ObjectESPCache = {}
@@ -1543,15 +1652,16 @@ local function MkDraw(t, p)
 end
 
 
+-- SHOT VISUALS STATE
+
 -- SV: small state table to avoid chunk-level register pressure
 local SV = {
     shotNumSetup = false,
 }
 
 
-local function IsLocalADS()
-    return S.ads and S.ads.Value == true
-end
+-- ADS TRACKING (reads LegacyLocalVariables each frame via GetPlayerModifiers)
+
 
 local function CreatePlayerESP(player)
     if ESPObjects[player] then return end
@@ -1641,7 +1751,9 @@ local function HideObjectESP(inst)
     d.HealthText.Visible=false; d.HealthPercentText.Visible=false; d.NameText.Visible=false
 end
 
--- eazyp
+
+-- ESP RENDERING
+
 local function Get2DBox(pd)
     local sp = pd.ScreenPos; local depth = pd.Depth
     if not pd.OnScreen or depth < 1 then return nil end
@@ -1809,7 +1921,10 @@ local function GetObjectBox(inst)
 end
 
 
--- bruh building mhe tak tak tak takt aktatka tkatka tkatka tkatka
+
+-- BUILDING TEAM HELPER
+-- Returns "enemy", "team", or "unknown" for a building model
+
 local function GetBuildingTeam(inst)
     local ownerName = inst.Name:match("^(.+)'s ") or inst.Name:match("^(.+)'s")
     if not ownerName then return "unknown" end
@@ -1845,6 +1960,8 @@ local function UpdateObjectESP(inst, tn, overrideColor)
     end
 end
 
+
+-- CHAMS (keyed on player, handles respawns correctly)
 
 local function GetOrCreatePlayerHighlight(pd)
     local cached = PlayerChamsCache[pd.Player]
@@ -2000,6 +2117,8 @@ end
 
 
 
+-- GUN MOD HELPERS
+
 local function SetFireRateMultiplier(mult)
     pcall(function()
         local wepName = GetLocalWeapon()
@@ -2055,7 +2174,9 @@ local function SetMaxRange(enabled)
     end)
 end
 
--- damage mod skidded straight from ethereon
+
+-- DAMAGE MOD
+
 local _dmgModOrig = nil
 local _dmgModInstalled = false
 local _dmgModFrameworks = {}
@@ -2089,6 +2210,8 @@ local function InstallDmgMod()
 end
 
 
+-- INF CLOAK / INF SHIELD
+
 local _infCloakConn = nil
 local _infShieldConn = nil
 
@@ -2118,6 +2241,9 @@ local function SetupInfShield(enabled)
     end)
 end
 
+
+-- PER-WEAPON-TYPE INF AMMO
+
 local _profileInfUseConns   = {}  -- keyed by type "Projectile","Hitscan","Melee"
 local _profileInfResConns   = {}
 
@@ -2134,7 +2260,7 @@ local function SetupProfileInfUseAmmo(wtype, enabled)
         local tog = "InfUse_"..wtype
         _profileInfUseConns[wtype] = ctr:GetPropertyChangedSignal("Value"):Connect(function()
             if not (Toggles[tog] and Toggles[tog].Value) then return end
-            if GetWeaponType(GetLocalWeapon()) ~= wtype then return end
+            if GetCurrentProfileType() ~= wtype then return end
             if ctr.Value >= lastVal then lastVal = ctr.Value; return end
             lastVal = ctr.Value
             local wep = ReplicatedStorage.Weapons:FindFirstChild(GetLocalWeapon())
@@ -2158,7 +2284,7 @@ local function SetupProfileInfResAmmo(wtype, enabled)
         local tog = "InfRes_"..wtype
         _profileInfResConns[wtype] = ctr:GetPropertyChangedSignal("Value"):Connect(function()
             if not (Toggles[tog] and Toggles[tog].Value) then return end
-            if GetWeaponType(GetLocalWeapon()) ~= wtype then return end
+            if GetCurrentProfileType() ~= wtype then return end
             if ctr.Value >= lastVal then lastVal = ctr.Value; return end
             lastVal = ctr.Value
             local wep = ReplicatedStorage.Weapons:FindFirstChild(GetLocalWeapon())
@@ -2168,11 +2294,13 @@ local function SetupProfileInfResAmmo(wtype, enabled)
 end
 
 
+-- PER-WEAPON-TYPE FIRE RATE (applied only for active type)
+
 local function ApplyWeaponProfileFireRates()
     pcall(function()
-        local wtype = GetWeaponType(GetLocalWeapon())
-        local tog = "FastGun_"..wtype
-        local opt = "FireRate_"..wtype
+        local ptype = GetCurrentProfileType()
+        local tog = "FastGun_"..ptype
+        local opt = "FireRate_"..ptype
         if Toggles[tog] and Toggles[tog].Value and Options[opt] then
             SetFireRateMultiplier(Options[opt].Value)
         end
@@ -2180,14 +2308,14 @@ local function ApplyWeaponProfileFireRates()
 end
 local _bhopHeartbeat = nil
 
--- Fire rate: re-apply when weapon type changes
+-- Fire rate: re-apply when profile type changes
 do
-    local _lastFRWeaponType = nil
+    local _lastPType = nil
     RunService.Heartbeat:Connect(function()
         if Library.Unloaded then return end
-        local wtype = GetWeaponType(GetLocalWeapon())
-        if wtype ~= _lastFRWeaponType then
-            _lastFRWeaponType = wtype
+        local ptype = GetCurrentProfileType()
+        if ptype ~= _lastPType then
+            _lastPType = ptype
             pcall(function()
                 RestoreFireRate()
                 ApplyWeaponProfileFireRates()
@@ -2221,14 +2349,8 @@ UserInputService.InputBegan:Connect(function(input, processed)
 end)
 
 
+-- UI — AIMBOT TAB
 
--- Shared: Prediction Indicator
-do
-    local PI = Tabs.Aimbot:AddRightGroupbox("Prediction Indicator", "activity")
-    PI:AddToggle("ShowPredictionIndicator", { Text="Show Prediction Indicator", Default=false })
-    PI:AddDropdown("PredictionIndicatorSymbol", { Values={"+"}, Default="+", Text="Symbol" })
-    PI:AddLabel("Indicator Color"):AddColorPicker("PredictionIndicatorColor", { Default=Color3.new(0,1,1), Title="Indicator Color" })
-end
 
 -- Shared: FOV circle color + aim arms
 do
@@ -2244,44 +2366,71 @@ do
         end })
 end
 
--- Weapon Profiles tabbox — all SA settings are per-profile
+-- Projectile groupbox: all projectile-specific SA settings + prediction indicator
+do
+    local PG = Tabs.Aimbot:AddRightGroupbox("Projectile", "activity")
+    -- SA
+    PG:AddToggle("SA_Enabled_Projectile",    { Text="Silent Aim",      Default=false })
+    PG:AddToggle("SA_AutoShoot_Projectile",  { Text="Auto Shoot",      Default=false })
+    PG:AddToggle("SA_IgnoreInvis_Projectile",{ Text="Ignore Invisible",Default=true })
+    PG:AddSlider("SA_FOV_Projectile",        { Text="FOV Radius",      Default=200, Min=10, Max=800, Rounding=0 })
+    PG:AddToggle("SA_FOVCircle_Projectile",  { Text="Show FOV Circle", Default=true })
+    PG:AddDropdown("SA_Sort_Projectile",     { Values={"Closest to Mouse","Closest Distance"}, Default="Closest to Mouse", Text="Sort Mode" })
+    PG:AddDropdown("SA_Targets_Projectile",  { Values={"Players","Sentry","Stickybomb"}, Default=1, Multi=true, Text="Aim At" })
+    Options["SA_Targets_Projectile"]:SetValue({ Players=true })
+    PG:AddDropdown("SA_BodyParts_Projectile",{ Values={"Head","Chest","Torso","Arms","Legs","Feet"}, Default=1, Multi=true, Text="Body Parts" })
+    Options["SA_BodyParts_Projectile"]:SetValue({ Head=true })
+    PG:AddDivider()
+    -- Fire rate
+    PG:AddToggle("FastGun_Projectile", { Text="Fast Gun", Default=false,
+        Callback=function(v) if not v then RestoreFireRate() else ApplyWeaponProfileFireRates() end end })
+    PG:AddSlider("FireRate_Projectile", { Text="Fire Rate", Default=1, Min=1, Max=25, Rounding=1, Suffix="x",
+        Callback=function(v)
+            if Toggles.FastGun_Projectile and Toggles.FastGun_Projectile.Value
+               and GetCurrentProfileType() == "Projectile" then SetFireRateMultiplier(v) end
+        end })
+    PG:AddDivider()
+    -- Inf ammo
+    PG:AddToggle("InfUse_Projectile", { Text="Inf Use Ammo",    Default=false, Callback=function(v) SetupProfileInfUseAmmo("Projectile", v) end })
+    PG:AddToggle("InfRes_Projectile", { Text="Inf Reserve Ammo",Default=false, Callback=function(v) SetupProfileInfResAmmo("Projectile", v) end })
+    PG:AddDivider()
+    -- Prediction indicator (merged at bottom)
+    PG:AddToggle("ShowPredictionIndicator", { Text="Show Prediction Indicator", Default=false })
+    PG:AddDropdown("PredictionIndicatorSymbol", { Values={"+"}, Default="+", Text="Symbol" })
+    PG:AddLabel("Indicator Color"):AddColorPicker("PredictionIndicatorColor", { Default=Color3.new(0,1,1), Title="Indicator Color" })
+end
+
+-- Weapon Profiles tabbox — per equipped slot
 do
     local PTB = Tabs.Aimbot:AddLeftTabbox()
 
-    -- SA block shared across all profiles
     local function MakeSABlock(tab, wtype)
-        tab:AddToggle("SA_Enabled_"..wtype, { Text="Silent Aim", Default=false })
-        tab:AddToggle("SA_AutoShoot_"..wtype,   { Text="Auto Shoot",       Default=false })
-        tab:AddToggle("SA_IgnoreInvis_"..wtype, { Text="Ignore Invisible", Default=true })
-        tab:AddSlider("SA_FOV_"..wtype,         { Text="FOV Radius",       Default=200, Min=10, Max=800, Rounding=0 })
-        tab:AddToggle("SA_FOVCircle_"..wtype,   { Text="Show FOV Circle",  Default=true })
-        tab:AddDropdown("SA_Sort_"..wtype, { Values={"Closest to Mouse","Closest Distance"}, Default="Closest to Mouse", Text="Sort Mode" })
-        tab:AddDropdown("SA_Targets_"..wtype, { Values={"Players","Sentry","Stickybomb"}, Default=1, Multi=true, Text="Aim At" })
+        tab:AddToggle("SA_Enabled_"..wtype,    { Text="Silent Aim",      Default=false })
+        tab:AddToggle("SA_AutoShoot_"..wtype,  { Text="Auto Shoot",      Default=false })
+        tab:AddToggle("SA_IgnoreInvis_"..wtype,{ Text="Ignore Invisible",Default=true })
+        tab:AddSlider("SA_FOV_"..wtype,        { Text="FOV Radius",      Default=200, Min=10, Max=800, Rounding=0 })
+        tab:AddToggle("SA_FOVCircle_"..wtype,  { Text="Show FOV Circle", Default=true })
+        tab:AddDropdown("SA_Sort_"..wtype,     { Values={"Closest to Mouse","Closest Distance"}, Default="Closest to Mouse", Text="Sort Mode" })
+        tab:AddDropdown("SA_Targets_"..wtype,  { Values={"Players","Sentry","Stickybomb"}, Default=1, Multi=true, Text="Aim At" })
         Options["SA_Targets_"..wtype]:SetValue({ Players=true })
-        tab:AddDropdown("SA_BodyParts_"..wtype, { Values={"Head","Chest","Torso","Arms","Legs","Feet"}, Default=1, Multi=true, Text="Body Parts" })
+        tab:AddDropdown("SA_BodyParts_"..wtype,{ Values={"Head","Chest","Torso","Arms","Legs","Feet"}, Default=1, Multi=true, Text="Body Parts" })
         Options["SA_BodyParts_"..wtype]:SetValue({ Head=true })
     end
 
-    -- Fire rate block shared across all profiles
     local function MakeFireRateBlock(tab, wtype)
         tab:AddToggle("FastGun_"..wtype, { Text="Fast Gun", Default=false,
-            Callback=function(v)
-                if not v then RestoreFireRate() else ApplyWeaponProfileFireRates() end
-            end })
+            Callback=function(v) if not v then RestoreFireRate() else ApplyWeaponProfileFireRates() end end })
         tab:AddSlider("FireRate_"..wtype, { Text="Fire Rate", Default=1, Min=1, Max=25, Rounding=1, Suffix="x",
             Callback=function(v)
                 if Toggles["FastGun_"..wtype] and Toggles["FastGun_"..wtype].Value
-                   and GetWeaponType(GetLocalWeapon()) == wtype then
-                    SetFireRateMultiplier(v)
-                end
+                   and GetCurrentProfileType() == wtype then SetFireRateMultiplier(v) end
             end })
     end
 
-    -- DmgMod block (Hitscan + Melee only)
     local function MakeDmgModBlock(tab, wtype)
         tab:AddToggle("DmgMod_"..wtype, { Text="Damage Mod", Default=false,
             Callback=function(v)
-                Config.DmgMod.Enabled = v and GetWeaponType(GetLocalWeapon()) == wtype
+                Config.DmgMod.Enabled = v and GetCurrentProfileType() == wtype
                 if v and not _dmgModInstalled then InstallDmgMod() end
             end })
         tab:AddSlider("DmgModMult_"..wtype, { Text="Dmg Multiplier", Default=3, Min=1, Max=10, Rounding=1, Suffix="x",
@@ -2293,39 +2442,62 @@ do
             end })
     end
 
-    -- Inf Ammo block shared across all profiles
-    local function MakeInfAmmoBlock(tab, wtype)
-        tab:AddToggle("InfUse_"..wtype, { Text="Inf Use Ammo", Default=false,
-            Callback=function(v) SetupProfileInfUseAmmo(wtype, v) end })
-        tab:AddToggle("InfRes_"..wtype, { Text="Inf Reserve Ammo", Default=false,
-            Callback=function(v) SetupProfileInfResAmmo(wtype, v) end })
+    local function MakeWallbangBlock(tab, wtype)
+        tab:AddToggle("WallbangToggle_"..wtype, { Text="Wallbang", Default=false,
+            Callback=function(v)
+                Config.Wallbang.Enable = v
+                local anyWB = (Toggles["WallbangToggle_Primary"] and Toggles["WallbangToggle_Primary"].Value)
+                           or (Toggles["WallbangToggle_Secondary"] and Toggles["WallbangToggle_Secondary"].Value)
+                if anyWB then InstallWallbangHook() else RemoveWallbangHook() end
+            end })
     end
 
-    -- PROJECTILE: SA + fire rate + inf ammo (no dmg mod)
-    local PT = PTB:AddTab("Projectile")
-    MakeSABlock(PT, "Projectile")
-    PT:AddDivider()
-    MakeFireRateBlock(PT, "Projectile")
-    PT:AddDivider()
-    MakeInfAmmoBlock(PT, "Projectile")
+    local function MakeNoSpreadBlock(tab, wtype)
+        tab:AddToggle("NoSpread_"..wtype, { Text="No Spread", Default=false,
+            Callback=function(v)
+                Config.NoSpread.Enable = v
+                if v then EnsureGUILoaded(); SetupNoSpread()
+                    if S.kirk then S.charlieKirk=true; S.kirk.Value=S.kirk.Value*Config.NoSpread.Multiplier; S.charlieKirk=false end
+                end
+            end })
+        tab:AddSlider("NoSpreadMult_"..wtype, { Text="Spread Mult", Default=0.2, Min=0.2, Max=1, Rounding=2,
+            Callback=function(v) Config.NoSpread.Multiplier = v end })
+    end
 
-    -- HITSCAN: SA + fire rate + dmg mod + wallbang + inf ammo
-    local HT = PTB:AddTab("Hitscan")
-    MakeSABlock(HT, "Hitscan")
-    HT:AddDivider()
-    MakeFireRateBlock(HT, "Hitscan")
-    HT:AddDivider()
-    MakeDmgModBlock(HT, "Hitscan")
-    HT:AddDivider()
-    HT:AddToggle("WallbangToggle", { Text="Wallbang", Default=false,
-        Callback=function(v)
-            Config.Wallbang.Enable = v
-            if v then InstallWallbangHook() else RemoveWallbangHook() end
-        end })
-    HT:AddDivider()
-    MakeInfAmmoBlock(HT, "Hitscan")
+    local function MakeInfAmmoBlock(tab, wtype)
+        tab:AddToggle("InfUse_"..wtype, { Text="Inf Use Ammo",    Default=false, Callback=function(v) SetupProfileInfUseAmmo(wtype, v) end })
+        tab:AddToggle("InfRes_"..wtype, { Text="Inf Reserve Ammo",Default=false, Callback=function(v) SetupProfileInfResAmmo(wtype, v) end })
+    end
 
-    -- MELEE: SA + fire rate + dmg mod + melee range + backstab + auto melee + inf ammo
+    -- PRIMARY: SA + fire rate + dmg mod + wallbang + nospread + inf ammo
+    local PT = PTB:AddTab("Primary")
+    MakeSABlock(PT, "Primary")
+    PT:AddDivider()
+    MakeFireRateBlock(PT, "Primary")
+    PT:AddDivider()
+    MakeDmgModBlock(PT, "Primary")
+    PT:AddDivider()
+    MakeWallbangBlock(PT, "Primary")
+    PT:AddDivider()
+    MakeNoSpreadBlock(PT, "Primary")
+    PT:AddDivider()
+    MakeInfAmmoBlock(PT, "Primary")
+
+    -- SECONDARY: SA + fire rate + dmg mod + wallbang + nospread + inf ammo
+    local HT = PTB:AddTab("Secondary")
+    MakeSABlock(HT, "Secondary")
+    HT:AddDivider()
+    MakeFireRateBlock(HT, "Secondary")
+    HT:AddDivider()
+    MakeDmgModBlock(HT, "Secondary")
+    HT:AddDivider()
+    MakeWallbangBlock(HT, "Secondary")
+    HT:AddDivider()
+    MakeNoSpreadBlock(HT, "Secondary")
+    HT:AddDivider()
+    MakeInfAmmoBlock(HT, "Secondary")
+
+    -- MELEE: SA + fire rate + dmg mod + melee features + inf ammo
     local MT = PTB:AddTab("Melee")
     MakeSABlock(MT, "Melee")
     MT:AddDivider()
@@ -2347,6 +2519,8 @@ do
 end
 
 
+
+-- UI — VISUALS TAB
 
 do
     local ETB  = Tabs.Visuals:AddLeftTabbox()
@@ -2521,6 +2695,8 @@ do
 end
 
 
+-- UI — MISC TAB
+
 do
     local ML = Tabs.Misc:AddLeftGroupbox("Misc", "wrench")
     ML:AddToggle("AegisStatus", { Text="Aegis Status", Default=false,
@@ -2603,6 +2779,8 @@ do
 end
 
 
+-- UI — EXPLOITS TAB
+
 do
     local EL = Tabs.Exploits:AddLeftGroupbox("Exploits", "zap")
 
@@ -2630,7 +2808,7 @@ do
         Config.Speed.Enable = Toggles.SpeedToggle.Value; SetupSpeed()
         if not Toggles.SpeedToggle.Value and S.speedConnection then S.speedConnection:Disconnect(); S.speedConnection=nil end
     end)
-    EL:AddSlider("SpeedValue", { Text="Speed Value", Default=300, Min=1, Max=600, Rounding=0,
+    EL:AddSlider("SpeedValue", { Text="Speed Value", Default=300, Min=1, Max=400, Rounding=0,
         Callback=function(v) Config.Speed.Value=v; if Config.Speed.Enable and LocalPlayer.Character then LocalPlayer.Character:SetAttribute("Speed",v) end end })
 end
 
@@ -2662,6 +2840,8 @@ task.spawn(function() while true do task.wait(2); if Library.Unloaded then break
 end end)
 
 
+-- UI — SETTINGS TAB
+
 do
     local SL = Tabs.Settings:AddLeftGroupbox("FOV", "maximize")
     SL:AddToggle("CustomFOV", { Text="Custom FOV", Default=false })
@@ -2673,13 +2853,15 @@ end
 
 do
     local MG = Tabs.Settings:AddLeftGroupbox("Mobile", "smartphone")
-    MG:AddToggle("MobileModeToggle", { Text="Mobile", Default=isMobileDevice })
+    MG:AddToggle("MobileModeToggle", { Text="Mobile Mode", Default=isMobileDevice })
     Toggles.MobileModeToggle:OnChanged(function()
         isMobileMode = Toggles.MobileModeToggle.Value
     end)
     if isMobileDevice then task.defer(function() task.wait(1); if Toggles.MobileModeToggle then Toggles.MobileModeToggle:SetValue(true) end end) end
 end
 
+
+-- AUTOMATION LOGIC
 
 local function UpdateUsernameHider()
     if not Toggles.UsernameHider.Value then return end
@@ -2767,13 +2949,14 @@ local function RunAutoAirblast()
 end
 
 local function RunSilentAimLogic()
-    -- Dead check: don't aim/shoot while dead
+    -- Dead check
     do
         local char = LocalPlayer.Character
         if char then
             local deadVal = char:FindFirstChild("Dead")
             if deadVal and deadVal.Value == true then
-                S.silentAimKeyActive = false; S.shooting = false; return
+                if S.shooting then VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0); S.shooting=false end
+                S.silentAimKeyActive = false; return
             end
         end
     end
@@ -2781,30 +2964,36 @@ local function RunSilentAimLogic()
     local prof = GetActiveSAProfile()
     local saEnabled = Toggles[prof.enabled] and Toggles[prof.enabled].Value
     Config.SilentAim.Enabled = saEnabled or false
-    if not Config.SilentAim.Enabled then S.silentAimKeyActive = false
-        S.shooting = false
-        return
+    if not Config.SilentAim.Enabled then
+        if S.shooting then VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0); S.shooting=false end
+        S.silentAimKeyActive = false; return
     end
-    -- Key check: Global aim key only (replaces per-profile keys)
+
     local globalAlwaysOn = Toggles.GlobalAimAlwaysOn and Toggles.GlobalAimAlwaysOn.Value
     local globalKeyActive = globalAlwaysOn or (Options.GlobalAimKey and Options.GlobalAimKey:GetState()) or false
-    S.silentAimKeyActive = isMobileMode or globalKeyActive
 
-    if not S.silentAimKeyActive then
-        S.shooting = false
+    if not IsPlayerAlive(LocalPlayer) then
+        if S.shooting then VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0); S.shooting=false end
         return
     end
-
-    if not IsPlayerAlive(LocalPlayer) then return end
     local weapon = GetLocalWeapon(); if BlacklistedWeapons[weapon] then return end
 
-    local target = FrameCache.silentTarget
-    if target and Toggles[prof.autoShoot] and Toggles[prof.autoShoot].Value then
-        if tick()-S.lastShotTime >= S.shotInterval then
-            FireShot(); S.shooting=true; S.lastShotTime=tick()
+    local target    = FrameCache.silentTarget
+    local autoOn    = Toggles[prof.autoShoot] and Toggles[prof.autoShoot].Value
+
+    if target and autoOn then
+        S.silentAimKeyActive = true  -- force aim deflection while autoshooting
+        if not S.shooting then
+            VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,0)
+            S.shooting=true; S.lastShotTime=tick()
+        elseif tick()-S.lastShotTime >= S.shotInterval then
+            VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0)
+            VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,0)
+            S.lastShotTime=tick()
         end
-    elseif not target then
-        S.shooting = false
+    else
+        if S.shooting then VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0); S.shooting=false end
+        S.silentAimKeyActive = isMobileMode or globalKeyActive
     end
 end
 
@@ -2902,6 +3091,8 @@ local function RunAutoSticky(playerData)
 end
 
 
+-- PROJECTILE PATH VISUALIZATION
+
 local function RunPredictionIndicator()
     if not (Toggles.ShowPredictionIndicator and Toggles.ShowPredictionIndicator.Value and Config.SilentAim.Enabled and S.silentAimKeyActive) then
         PredictionIndicator.Visible = false; return
@@ -2925,6 +3116,8 @@ local function RunPredictionIndicator()
 end
 
 
+-- HEAL SELF
+
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed or Library.Unloaded then return end
     if Toggles.HealSelfToggle.Value then
@@ -2936,6 +3129,8 @@ UserInputService.InputBegan:Connect(function(input, processed)
     end
 end)
 
+
+-- HIT TRACKING (health cache only — notification UI removed)
 
 task.defer(function()
     local function TrackCharacter(plr)
@@ -2964,6 +3159,8 @@ LogService.MessageOut:Connect(function(message)
 end)
 
 
+-- CHEATER DETECTOR
+
 task.defer(function()
     local notifiedCheaters = {}
     local function CheckCheater(player)
@@ -2983,6 +3180,8 @@ task.defer(function()
     Players.PlayerRemoving:Connect(function(p) notifiedCheaters[p.UserId] = nil end)
 end)
 
+
+-- MOD / STAFF DETECTOR (own function scope to avoid chunk register overflow)
 
 task.defer(function()
     local STAFF_ATTRS = {
@@ -3030,6 +3229,8 @@ task.defer(function()
     Players.PlayerRemoving:Connect(function(p) alreadyNotified[p.UserId] = nil end)
 end)
 
+
+-- WEAPON OUTLINE (highlights enemy/friend equipped weapons via chams colors)
 
 local AccChamsCache = {}  -- [player] = Highlight on their equipped Tool
 local _weaponOutlineHL = nil  -- unused, kept for unload compat
@@ -3109,18 +3310,20 @@ local function UpdateAccChams()
 end
 
 
+-- RENDER HELPERS (single table = 1 local instead of 9)
+
 local RH = {}
 
 function RH.UpdateDmgMod()
-    local wtype = GetWeaponType(GetLocalWeapon())
-    local tog = "DmgMod_"..wtype
+    local ptype = GetCurrentProfileType()
+    local tog = "DmgMod_"..ptype
     Config.DmgMod.Enabled = Toggles[tog] and Toggles[tog].Value or false
     if Config.DmgMod.Enabled then
-        local infTog = "DmgModInf_"..wtype
+        local infTog = "DmgModInf_"..ptype
         if Toggles[infTog] and Toggles[infTog].Value then
             Config.DmgMod.Multiplier = math.huge
         else
-            local opt = "DmgModMult_"..wtype
+            local opt = "DmgModMult_"..ptype
             Config.DmgMod.Multiplier = Options[opt] and Options[opt].Value or 3
         end
     end
@@ -3194,6 +3397,8 @@ function RH.AgentNotify(playerData)
 end
 
 
+-- MAIN RENDER LOOP
+
 local MainConnection = RunService.RenderStepped:Connect(function(dt)
     if Library.Unloaded then return end
     Camera = Workspace.CurrentCamera
@@ -3247,6 +3452,8 @@ local MainConnection = RunService.RenderStepped:Connect(function(dt)
 end)
 
 
+-- FPS COUNTER & WATERMARK
+
 task.spawn(function() while true do task.wait(1); if Library.Unloaded then break end; S.fps=S.frames; S.frames=0 end end)
 
 local _WatermarkLabel = nil
@@ -3268,6 +3475,8 @@ end end)
 pcall(function() Library:SetWatermarkVisibility(true) end)
 
 
+-- CLEANUP
+
 Players.PlayerRemoving:Connect(function(player)
     DestroyPlayerESP(player)
     RemovePlayerHighlight(player)
@@ -3276,6 +3485,8 @@ Players.PlayerRemoving:Connect(function(player)
     lastChamsProps[player]=nil
 end)
 
+
+-- UI SETTINGS TAB
 
 task.defer(function()
     local MenuGroup = Tabs["UI Settings"]:AddLeftGroupbox("Menu", "wrench")
@@ -3303,6 +3514,8 @@ task.defer(function()
     SaveManager:LoadAutoloadConfig()
 end)
 
+
+-- UNLOAD
 
 Library:OnUnload(function()
     for p in pairs(ESPObjects)    do DestroyPlayerESP(p) end
@@ -3342,4 +3555,4 @@ Library:OnUnload(function()
     Library.Unloaded = true
 end)
 
-print("[Aegis] huuf puuuf booooommm https://discord.gg/s9NEAtbd")
+print("[Aegis] loaded, account stolen.")
