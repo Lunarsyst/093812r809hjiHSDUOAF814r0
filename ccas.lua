@@ -296,7 +296,7 @@ local SkeletonConnections = {
 
 local ProjectileWeapons = {
     ["Direct Hit"]       = {Speed=123.75, Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["Maverick"]         = {Speed=64.75,  Gravity=15,   InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Maverick"]         = {Speed=64.75,  Gravity=7.5,   InitialAngle=0,    Lifetime=99,  Type="Rocket"},
     ["Rocket Launcher"]  = {Speed=64.75,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
     ["Double Trouble"]   = {Speed=64.75,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
     ["Blackbox"]         = {Speed=68.75,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
