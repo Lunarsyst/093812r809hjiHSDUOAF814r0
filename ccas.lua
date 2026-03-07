@@ -386,7 +386,7 @@ end
 
 local Window = Library:CreateWindow({
     Title = "Aegis",
-    Footer = "aegis.dev | hi guys am fortnite",
+    Footer = "aegis.dev | discord.gg/qvW87kbbKZ",
     NotifySide = "Right",
     ShowCustomCursor = true,
 })
@@ -2630,7 +2630,7 @@ do
         Config.Speed.Enable = Toggles.SpeedToggle.Value; SetupSpeed()
         if not Toggles.SpeedToggle.Value and S.speedConnection then S.speedConnection:Disconnect(); S.speedConnection=nil end
     end)
-    EL:AddSlider("SpeedValue", { Text="Speed Value", Default=300, Min=1, Max=400, Rounding=0,
+    EL:AddSlider("SpeedValue", { Text="Speed Value", Default=300, Min=1, Max=600, Rounding=0,
         Callback=function(v) Config.Speed.Value=v; if Config.Speed.Enable and LocalPlayer.Character then LocalPlayer.Character:SetAttribute("Speed",v) end end })
 end
 
@@ -2673,7 +2673,7 @@ end
 
 do
     local MG = Tabs.Settings:AddLeftGroupbox("Mobile", "smartphone")
-    MG:AddToggle("MobileModeToggle", { Text="Mobile Mode", Default=isMobileDevice })
+    MG:AddToggle("MobileModeToggle", { Text="Mobile", Default=isMobileDevice })
     Toggles.MobileModeToggle:OnChanged(function()
         isMobileMode = Toggles.MobileModeToggle.Value
     end)
