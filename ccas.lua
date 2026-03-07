@@ -1,9 +1,7 @@
 -- Aegis | Typical Colors 2
 -- Obsidian UI Library
 
-------------------------------------------------------------
--- PLACE CHECK
-------------------------------------------------------------
+--  p check
 if game.PlaceId ~= 328028363 then
     game:GetService("Players").LocalPlayer:Kick("[Aegis] join tc2 diddyblud")
     return
@@ -11,11 +9,6 @@ end
 
 if setthreadidentity then setthreadidentity(8) end
 
-------------------------------------------------------------
--- ANTICHEAT BYPASS (getreg thread cancellation)
--- Enumerates all live coroutines via getreg(), cancels any
--- threads sourced from NewLoader. Expects exactly 3.
-------------------------------------------------------------
 do
     local _RS  = game:GetService("RunService")
     local _Rep = game:GetService("ReplicatedStorage")
@@ -48,9 +41,6 @@ do
 end
 
 
-------------------------------------------------------------
--- LIBRARY
-------------------------------------------------------------
 local repo        = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local Library     = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
@@ -61,12 +51,6 @@ local Toggles = Library.Toggles
 
 Library.ShowToggleFrameInKeybinds = true
 
-------------------------------------------------------------
--- CHEATER LIST (external loadstring)
--- The linked script should set:
---   getgenv().AegisCheaterList = { [userId] = "DisplayName", ... }
--- If the link hasn't been set yet, this is a no-op.
-------------------------------------------------------------
 do
     local CHEATER_LIST_URL = "https://raw.githubusercontent.com/Lunarsyst/-3197-541/refs/heads/main/21398?token=GHSAT0AAAAAADWRVML2IKRWVD3EOHTPZ4662NCAY6A"
     if CHEATER_LIST_URL ~= "" then
@@ -80,9 +64,7 @@ local function IsCheater(player)
     return CheaterList[player.UserId] ~= nil
 end
 
-------------------------------------------------------------
--- SERVICES
-------------------------------------------------------------
+
 local Players            = game:GetService("Players")
 local RunService         = game:GetService("RunService")
 local UserInputService   = game:GetService("UserInputService")
@@ -93,9 +75,25 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 local Stats              = game:GetService("Stats")
 local LogService         = game:GetService("LogService")
 
-------------------------------------------------------------
--- WEAPON VALUE SNAPSHOT (for Gun Mod restores)
-------------------------------------------------------------
+
+local WeaponsModule = nil
+task.spawn(function()
+    pcall(function()
+        local PG = LocalPlayer:WaitForChild("PlayerGui", 30); if not PG then return end
+        local GUI = PG:WaitForChild("GUI", 10); if not GUI then return end
+        local Client = GUI:WaitForChild("Client", 10); if not Client then return end
+        local Functions = Client:WaitForChild("Functions", 10); if not Functions then return end
+        WeaponsModule = require(Functions.Weapons)
+    end)
+end)
+
+local function FireShot()
+    if WeaponsModule then
+        pcall(function() WeaponsModule.firebullet() end)
+    end
+end
+
+
 local WeaponSnapshot = {}
 task.spawn(function()
     task.wait(2)
@@ -129,9 +127,7 @@ local function StampAegisCharacter(char)
 end
 local isMobileMode   = false
 
-------------------------------------------------------------
--- CONSTANTS
-------------------------------------------------------------
+-- mhe tak tak tak tak constant
 local BACKSTAB_RANGE         = 7.8
 local MELEE_RANGE_RAGE       = 7.8
 local MELEE_RANGE_DEMOKNIGHT = 9
@@ -140,10 +136,7 @@ local TC2_JUMP_POWER         = 16
 local PROJECTILE_OFFSET      = Vector3.new(0.32, -0.14, -0.56)
 local SIM_PARAMS_CACHE_TTL   = 0.5
 
-------------------------------------------------------------
--- CACHED PLAYER LIST
--- Rebuilt only on join/leave, never per-frame
-------------------------------------------------------------
+
 local cachedPlayerList = {}
 do
     for _, p in ipairs(Players:GetPlayers()) do table.insert(cachedPlayerList, p) end
@@ -157,11 +150,9 @@ do
     end)
 end
 
-------------------------------------------------------------
--- STATE
-------------------------------------------------------------
+
 local S = {
-    charlieKirk = false,
+    charlieKirk = false, -- haha get it charlie kirk shooting
     shooting = false, lastShotTime = 0, shotInterval = 0.033,
     lastHitTime = 0, hitCooldown = 0.1,
     jitterDir = 1, spinAngle = 0, lastJitterUpdate = 0,
@@ -196,9 +187,8 @@ local cachedDispensers   = {}
 local cachedTeleporters  = {}
 local cachedAmmo         = {}
 local cachedHP           = {}
--- Chams cache keyed on player (not char) so respawns don't cause stale entries
-local PlayerChamsCache   = {}  -- [player] = { hl=Highlight, char=Model }
-local lastChamsProps     = {}  -- [player] = { fc, oc, ft, ot, dm }
+local PlayerChamsCache   = {}
+local lastChamsProps     = {} 
 local WorldChamsCache    = {}
 local ProjectileChamsCache = {}
 
@@ -208,11 +198,9 @@ local FrameCache = {
     camPos = Vector3.zero, camCF = CFrame.new(),
     screenCenter = Vector2.new(),
     frameNum = 0,
+    lastPredictedPos = nil,
 }
 
-------------------------------------------------------------
--- FREECAM DUMMY
-------------------------------------------------------------
 task.spawn(function()
     local function EnsureFreecamDummy()
         pcall(function()
@@ -227,9 +215,7 @@ task.spawn(function()
     while true do task.wait(5); if Library.Unloaded then break end; EnsureFreecamDummy() end
 end)
 
-------------------------------------------------------------
--- GUI LOADER
-------------------------------------------------------------
+
 local function EnsureGUILoaded()
     if S._guiLoaded then return true end
     pcall(function()
@@ -253,9 +239,7 @@ local function RightClick()
     end)
 end
 
-------------------------------------------------------------
--- DATA TABLES
-------------------------------------------------------------
+-- skid 100, the mainframe.. heh.
 local HitboxTables = {
     Head  = {"Head","HeadHB"},
     Chest = {"UpperTorso","HumanoidRootPart"},
@@ -274,7 +258,7 @@ local SkeletonConnections = {
 }
 
 local ProjectileWeapons = {
-    ["Direct Hit"]       = {Speed=123.75, Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Direct Hit"]       = {Speed=120, Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
     ["Maverick"]         = {Speed=64.75,  Gravity=15,   InitialAngle=0,    Lifetime=99,  Type="Rocket"},
     ["Rocket Launcher"]  = {Speed=64.75,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
     ["Double Trouble"]   = {Speed=64.75,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
@@ -297,13 +281,13 @@ local ProjectileWeapons = {
     ["Rescue Ranger"]    = {Speed=150,    Gravity=3,    InitialAngle=0,    Lifetime=99,  Type="Syringe"},
     ["Apollo"]           = {Speed=125,    Gravity=3,    InitialAngle=0,    Lifetime=99,  Type="Syringe"},
     ["Big Bite"]         = {Speed=64.75,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["Night Sky Ignitor"]= {Speed=123.75, Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Night Sky Ignitor"]= {Speed=120, Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
     ["Twin-Turbolence"]  = {Speed=76,     Gravity=42.6, InitialAngle=7.92, Lifetime=0.8, Type="Grenade"},
 }
 
 local ChargeWeapons = {
     ["Huntsman"] = {SpeedMin=113.25, SpeedMax=162.5, GravityMin=24.8, GravityMax=5.0,
-                    Gravity=24.8, InitialAngle=0, ChargeTime=1.0, Lifetime=99, Type="Arrow"},
+                    Gravity=24.8, InitialAngle=1.5, ChargeTime=1.0, Lifetime=99, Type="Arrow"},
 }
 
 local BackstabWeapons = {
@@ -343,7 +327,7 @@ local BlacklistedWeapons = {
     ["Kritzkrieg"]=true,["Rejuvenator"]=true,["The Vaccinator"]=true,
     ["Medigun"]=true,["Radius Scanner"]=true,["Slow Burn"]=true,["Spy Camera"]=true,
     ["Stray Reflex"]=true,["Sapper"]=true,["Disguise Kit"]=true,["Jarate"]=true,
-    ["Mad Milk"]=true,["Witches Brew"]=true,["Bloxy Cola"]=true,
+    ["Mad Milk"]=true,["Witches Brew"]=true,["Bloxy Cola"]=true,["Lemonade"]=true,
 }
 
 local projectileNames = {
@@ -351,7 +335,7 @@ local projectileNames = {
     "Arrow","Flare Gun","Baseball","Snowballs","Milk Pistol",
 }
 
--- Rainbow color helper for Ubercharged status
+-- taste the "Rainbow"
 local function GetRainbowColor()
     local t = tick() * 1.5  -- speed
     local h = t % 1
@@ -368,22 +352,20 @@ local function GetRainbowColor()
     return Color3.new(r,g,b)
 end
 
--- Status effects from workspace.PlayerName.Conditions attributes
--- Matches exactly what TC2 uses (confirmed via screenshot)
+
 local StatusLetters = {
-    Bleeding    = {Letter="B",  Color=Color3.fromRGB(255,50,50)},
-    Cloaked     = {Letter="C",  Color=Color3.fromRGB(150,150,255)},
-    Coated      = {Letter="Co", Color=Color3.fromRGB(180,100,255)},
-    Engulfed    = {Letter="E",  Color=Color3.fromRGB(255,150,0)},
-    Lemoned     = {Letter="L",  Color=Color3.fromRGB(255,255,0)},
-    Milked      = {Letter="M",  Color=Color3.fromRGB(230,230,230)},
-    Poisoned    = {Letter="P",  Color=Color3.fromRGB(100,200,50)},
-    Ubercharged = {Letter="U",  Color=Color3.fromRGB(255,215,0)},
+    Bleeding    = {Letter="B",   Color=Color3.fromRGB(255,50,50)},
+    Cloaked     = {Letter="C",   Color=Color3.fromRGB(150,150,255)},
+    Coated      = {Letter="Co",  Color=Color3.fromRGB(180,100,255)},
+    Engulfed    = {Letter="E",   Color=Color3.fromRGB(255,150,0)},
+    Lemoned     = {Letter="L",   Color=Color3.fromRGB(255,255,0)},
+    Milked      = {Letter="M",   Color=Color3.fromRGB(230,230,230)},
+    Poisoned    = {Letter="P",   Color=Color3.fromRGB(100,200,50)},
+    Ubercharged = {Letter="U",   Color=Color3.fromRGB(255,215,0)}, -- mhe tak tak god im such a faggot
+    ADS         = {Letter="ADS", Color=Color3.fromRGB(200,200,200)},
 }
 
-------------------------------------------------------------
--- CONFIG
-------------------------------------------------------------
+-- cfg
 getgenv().Config = {
     SilentAim     = {Enabled=false, FOV=200},
     AntiAim       = {Enabled=false, Mode="jitter", JitterAngle=90, JitterSpeed=15, AntiAimSpeed=180},
@@ -391,14 +373,20 @@ getgenv().Config = {
     NoSpread      = {Enable=false, Multiplier=0.2},
     Speed         = {Enable=false, Value=300},
     AutoUber      = {Enabled=false, HealthPercent=40, Condition="Both"},
+    DmgMod        = {Enabled=false, Multiplier=3},
 }
 
-------------------------------------------------------------
--- WINDOW & TABS
-------------------------------------------------------------
+local function GetWeaponType(weapon)
+    if not weapon or weapon == "Unknown" then return "Unknown" end
+    if ProjectileWeapons[weapon] or ChargeWeapons[weapon] then return "Projectile" end
+    if MeleeWeapons[weapon]      then return "Melee" end
+    if BlacklistedWeapons[weapon] then return "Other" end
+    return "Hitscan"
+end
+
 local Window = Library:CreateWindow({
     Title = "Aegis",
-    Footer = "aegis.dev | what is the best tc2 cheat currently? (in your opinion)",
+    Footer = "aegis.dev | hi guys am fortnite",
     NotifySide = "Right",
     ShowCustomCursor = true,
 })
@@ -412,16 +400,12 @@ local Tabs = {
     ["UI Settings"] = Window:AddTab("UI",     "settings"),
 }
 
-------------------------------------------------------------
--- NOTIFY HELPER
-------------------------------------------------------------
+-- notification header ting ting
 local function Notify(msg, duration)
     Library:Notify({ Title="Aegis", Description=tostring(msg), Time=duration or 3 })
 end
 
-------------------------------------------------------------
--- UTILITY
-------------------------------------------------------------
+
 local function GetCharacter(p)    return p and p.Character end
 local function GetHumanoid(c)     return c and c:FindFirstChildOfClass("Humanoid") end
 local function GetHRP(c)          return c and c:FindFirstChild("HumanoidRootPart") end
@@ -445,9 +429,7 @@ local function WorldToViewportPoint(pos)
     return Vector2.new(sp.X, sp.Y), os, sp.Z
 end
 
-------------------------------------------------------------
--- VISIBILITY (with early-exit dot product to skip off-screen raycasts)
-------------------------------------------------------------
+
 local raycastParams = RaycastParams.new()
 raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
 raycastParams.IgnoreWater = true
@@ -455,7 +437,7 @@ raycastParams.IgnoreWater = true
 local function IsPartVisible(part)
     if not part then return false end
     if visibilityCache[part] ~= nil then return visibilityCache[part] end
-    -- Skip raycast entirely if part is behind camera (~100° off screen)
+    -- -100 degrees lol
     local toDir = part.Position - FrameCache.camPos
     if toDir.Magnitude > 0.1 and FrameCache.camCF.LookVector:Dot(toDir.Unit) < -0.17 then
         visibilityCache[part] = false; return false
@@ -477,9 +459,7 @@ local function IsCharacterInvisible(char)
     return head and head.Transparency > 0.9
 end
 
-------------------------------------------------------------
--- REACH CHECK (used by melee/backstab to verify LOS)
-------------------------------------------------------------
+-- reach check
 local function HasLineOfSight(fromPos, toPos)
     local rp = RaycastParams.new()
     rp.FilterType = Enum.RaycastFilterType.Blacklist
@@ -491,19 +471,19 @@ local function HasLineOfSight(fromPos, toPos)
     return not hit or (hit.Position - fromPos).Magnitude >= dir.Magnitude - 1
 end
 
-------------------------------------------------------------
--- GetBestVisiblePart (fixed — no fallback, sort from dropdown)
-------------------------------------------------------------
+-- get visible pawrt..
 local function GetBestVisiblePart(char, selectedGroups, sortMode)
     if not char or char == LocalPlayer.Character then return nil end
     sortMode = sortMode or "Closest to Mouse"
+
+    local skipVisCheck = wallbangActive and GetWeaponType(GetLocalWeapon()) == "Hitscan"
 
     local candidates = {}
     for _, groupName in ipairs({"Head","Chest","Torso","Arms","Legs","Feet"}) do
         if selectedGroups[groupName] then
             for _, partName in ipairs(HitboxTables[groupName] or {}) do
                 local p = char:FindFirstChild(partName)
-                if p and IsPartVisible(p) then table.insert(candidates, p) end
+                if p and (skipVisCheck or IsPartVisible(p)) then table.insert(candidates, p) end
             end
         end
     end
@@ -529,16 +509,14 @@ local function GetBestVisiblePart(char, selectedGroups, sortMode)
     end
 end
 
-------------------------------------------------------------
--- PLAYER INFO HELPERS
-------------------------------------------------------------
+
 local function GetPlayerClass(p)
     local st = p:FindFirstChild("Status")
     if st then local c = st:FindFirstChild("Class"); if c then return tostring(c.Value) end end
     return "Unknown"
 end
 
--- Read MaxHealth directly from workspace character, fallback to humanoid MaxHealth
+-- fallback to humanoid MaxHealth
 local function GetPlayerMaxHP(player)
     local ok, val = pcall(function()
         return Workspace[player.Name].MaxHealth.Value
@@ -559,6 +537,26 @@ local function GetPlayerWeapon(char)
 end
 
 local function GetLocalWeapon()  return GetPlayerWeapon(GetLocalCharacter()) end
+
+-- returns the SA option/toggle keys for the currently equipped weapon type
+-- must be defined after GetLocalWeapon and GetWeaponType
+local function GetActiveSAProfile()
+    local wtype = GetWeaponType(GetLocalWeapon())
+    if wtype == "Unknown" or wtype == "Other" then wtype = "Hitscan" end
+    return {
+        enabled    = "SA_Enabled_"..wtype,
+        key        = "SA_Key_"..wtype,
+        alwaysOn   = "SA_AlwaysOn_"..wtype,
+        autoShoot  = "SA_AutoShoot_"..wtype,
+        ignoreInvis= "SA_IgnoreInvis_"..wtype,
+        fov        = "SA_FOV_"..wtype,
+        fovCircle  = "SA_FOVCircle_"..wtype,
+        sort       = "SA_Sort_"..wtype,
+        targets    = "SA_Targets_"..wtype,
+        bodyParts  = "SA_BodyParts_"..wtype,
+        wtype      = wtype,
+    }
+end
 
 local function GetLocalClass()
     if not EnsureGUILoaded() then return "Unknown" end
@@ -613,8 +611,15 @@ local function GetPlayerModifiers(player)
         local char = player.Character; if not char then return end
         local conds = char:FindFirstChild("Conditions"); if not conds then return end
         for attrName in pairs(StatusLetters) do
-            if conds:GetAttribute(attrName) == true then mods[attrName] = true end
+            if attrName ~= "ADS" and conds:GetAttribute(attrName) == true then mods[attrName] = true end
         end
+    end)
+    -- ADS: read from PlayerGui LegacyLocalVariables
+    pcall(function()
+        local gui = player.PlayerGui:FindFirstChild("GUI")
+        local llv = gui and gui:FindFirstChild("Client") and gui.Client:FindFirstChild("LegacyLocalVariables")
+        local adsVal = llv and llv:FindFirstChild("ads")
+        if adsVal and adsVal.Value == true then mods["ADS"] = true end
     end)
     return mods
 end
@@ -629,9 +634,7 @@ local function IsSyringeWeapon(weapon)
     return weapon == "Syringe Crossbow" or weapon == "Apollo"
 end
 
-------------------------------------------------------------
--- SIM RAY PARAMS (cached TTL, using cachedPlayerList)
-------------------------------------------------------------
+-- sim ray p
 local function GetSimRayParams()
     local now = tick()
     if S.simRayParamsCache and (now - S.simRayParamsCacheTime) < SIM_PARAMS_CACHE_TTL then
@@ -649,9 +652,7 @@ local function GetSimRayParams()
     return rp
 end
 
-------------------------------------------------------------
--- VELOCITY TRACKING (uses cachedPlayerList)
-------------------------------------------------------------
+-- velo tracking
 local function UpdateVelocityTracking()
     local now = tick()
     if now - S.lastVelocityUpdate < 0.03 then return end
@@ -716,9 +717,7 @@ local function IsVelocityStale(player)
     return GetPlayerVelocity(player).Magnitude > 10 and (recent.Pos - older.Pos).Magnitude < 2
 end
 
-------------------------------------------------------------
--- MOVEMENT SIMULATION
-------------------------------------------------------------
+-- thanks chat bbg
 local function SimTraceGround(position, rp)
     local result = Workspace:Raycast(position + Vector3.new(0,3,0), Vector3.new(0,-200,0), rp)
     if result then return result.Position, result.Normal end
@@ -866,9 +865,7 @@ local function SimulateTargetPosition(player, totalTime, steps, rp, wallCheck)
     return simPos
 end
 
-------------------------------------------------------------
--- OBJECT CACHING
-------------------------------------------------------------
+-- objection!
 local function RefreshObjectCaches()
     cachedSentries = {}; cachedDispensers = {}; cachedTeleporters = {}
     for _, v in pairs(Workspace:GetChildren()) do
@@ -948,9 +945,7 @@ local function GetProjectiles()
     return result
 end
 
-------------------------------------------------------------
--- CHARGE TRACKING
-------------------------------------------------------------
+
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed or Library.Unloaded then return end
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -977,9 +972,7 @@ local function GetCurrentWeaponSpeed(weaponName)
     return nil
 end
 
-------------------------------------------------------------
--- PROJECTILE PREDICTION
-------------------------------------------------------------
+-- the one, the only, projectile prediction
 local function CalculateAimPoint(origin, targetPos, speed, gravity, weaponName)
     if gravity == 0 then return targetPos end
     local dir  = targetPos - origin
@@ -1047,6 +1040,20 @@ local function PredictProjectileHit(targetPart, player, weaponName)
     -- Capture selected part's offset from HRP; simulation tracks HRP, we re-apply offset at end
     local partOffset = targetPart.Position - hrp.Position
 
+    -- For legs/feet, center horizontally between the left and right counterpart
+    local PART_MIRRORS = {
+        LeftLowerLeg="RightLowerLeg", RightLowerLeg="LeftLowerLeg",
+        LeftUpperLeg="RightUpperLeg", RightUpperLeg="LeftUpperLeg",
+        LeftFoot="RightFoot",         RightFoot="LeftFoot",
+    }
+    local mirrorName = PART_MIRRORS[targetPart.Name]
+    if mirrorName then
+        local mirrorPart = char:FindFirstChild(mirrorName)
+        if mirrorPart then
+            partOffset = ((targetPart.Position + mirrorPart.Position) * 0.5) - hrp.Position
+        end
+    end
+
     if IsVelocityStale(player) or GetPlayerVelocity(player).Magnitude < 0.5 then
         return targetPart.Position, (targetPart.Position - origin).Magnitude / speed
     end
@@ -1090,9 +1097,7 @@ local function PredictProjectileHit(targetPart, player, weaponName)
     return predictedPos, travelTime
 end
 
-------------------------------------------------------------
--- BUILD PLAYER DATA (single WorldToViewportPoint per player)
-------------------------------------------------------------
+
 local function BuildPlayerData()
     local data  = {}
     local lc    = GetLocalCharacter(); local lhrp = lc and GetHRP(lc); if not lhrp then return data end
@@ -1123,16 +1128,15 @@ local function BuildPlayerData()
     return data
 end
 
-------------------------------------------------------------
--- SILENT AIM TARGET SELECTION
-------------------------------------------------------------
+-- silent aim target 
 local function GetSilentAimTarget(playerData)
-    local fov        = Options.SilentAimFOV.Value
-    local aimTargets = Options.AimAtTargets.Value or {}
+    local prof       = GetActiveSAProfile()
+    local fov        = Options[prof.fov] and Options[prof.fov].Value or 200
+    local aimTargets = Options[prof.targets] and Options[prof.targets].Value or {}
     local weapon     = GetLocalWeapon()
     local isSyringe  = IsSyringeWeapon(weapon)
-    local sortMode   = Options.SilentAimSort.Value or "Closest to Mouse"
-    local selGroups  = Options.SilentAimBodyParts.Value or {Head=true}
+    local sortMode   = (Options[prof.sort] and Options[prof.sort].Value) or "Closest to Mouse"
+    local selGroups  = (Options[prof.bodyParts] and Options[prof.bodyParts].Value) or {Head=true}
     local sc         = FrameCache.screenCenter
 
     local bestPart, bestDist, bestPlayer = nil, math.huge, nil
@@ -1146,7 +1150,7 @@ local function GetSilentAimTarget(playerData)
                 if not pd.IsEnemy then continue end
             end
             if not pd.OnScreen then continue end
-            if Toggles.SilentIgnoreInvis.Value and IsCharacterInvisible(pd.Character) then continue end
+            if Toggles[prof.ignoreInvis] and Toggles[prof.ignoreInvis].Value and IsCharacterInvisible(pd.Character) then continue end
 
             local part = GetBestVisiblePart(pd.Character, selGroups, sortMode)
             if not part then continue end
@@ -1202,10 +1206,8 @@ local function GetSilentAimTarget(playerData)
     return bestPart, bestPlayer
 end
 
-------------------------------------------------------------
--- AIM ARMS (0.5s hold, 0.3s smooth return)
-------------------------------------------------------------
-local ARM_HOLD_TIME   = 0.5
+
+local ARM_HOLD_TIME   = 0.2
 local ARM_RETURN_TIME = 0.3
 
 local function AimArmsAt(targetPos)
@@ -1266,9 +1268,7 @@ local function TriggerAimArms(targetPos)
     end
 end
 
-------------------------------------------------------------
--- CAMERA HOOK
-------------------------------------------------------------
+-- camera hook thanks elysium
 local function GetProjectileAimCFrame(target, targetPlr, weapon)
     if weapon == "Huntsman" then
         local tChar = target:FindFirstAncestorOfClass("Model")
@@ -1276,6 +1276,7 @@ local function GetProjectileAimCFrame(target, targetPlr, weapon)
     end
     local predicted, _ = PredictProjectileHit(target, targetPlr, weapon)
     if not predicted then return nil end
+    FrameCache.lastPredictedPos = predicted
     if weapon == "Huntsman" then predicted = predicted + Vector3.new(0, 1.5, 0) end
     local spd, grav = GetCurrentWeaponSpeed(weapon)
     if grav and grav > 0 then
@@ -1369,9 +1370,7 @@ task.spawn(function()
     end)
 end)
 
-------------------------------------------------------------
--- NAMECALL HOOK (Fall Damage intercept)
-------------------------------------------------------------
+
 local _ncOrig
 _ncOrig = hookmetamethod(game, "__namecall", function(self2, ...)
     if not Library.Unloaded then
@@ -1383,45 +1382,32 @@ _ncOrig = hookmetamethod(game, "__namecall", function(self2, ...)
     return _ncOrig(self2, ...)
 end)
 
-------------------------------------------------------------
--- WALLBANG hook — __namecall intercept on Raycast
-------------------------------------------------------------
+
 local wallbangHook = nil
 local wallbangActive = false
 
 local function InstallWallbangHook()
     if wallbangHook then return end
     wallbangActive = true
-    wallbangHook = hookmetamethod(game, "__namecall", newcclosure(function(self2, ...)
-        if wallbangActive then
-            local method = getnamecallmethod()
-            -- Intercept workspace:Raycast — strip collisions by nullifying params
-            if method == "Raycast" and self2 == Workspace then
-                local args = {...}
-                -- Rebuild params with no filter so bullets pass through everything
-                local rp = RaycastParams.new()
-                rp.FilterType = Enum.RaycastFilterType.Blacklist
-                local lc = GetLocalCharacter()
-                rp.FilterDescendantsInstances = lc and {lc, Camera} or {Camera}
-                args[3] = rp
-                return wallbangHook(self2, table.unpack(args))
+    wallbangHook = hookmetamethod(game, "__index", newcclosure(function(self2, key)
+        if wallbangActive and not checkcaller() then
+            if key == "Clips" then
+                return workspace.Map
             end
         end
-        return wallbangHook(self2, ...)
+        return wallbangHook(self2, key)
     end))
 end
 
 local function RemoveWallbangHook()
     wallbangActive = false
     if wallbangHook then
-        hookmetamethod(game, "__namecall", wallbangHook)
+        hookmetamethod(game, "__index", wallbangHook)
         wallbangHook = nil
     end
 end
 
-------------------------------------------------------------
--- NO SPREAD
-------------------------------------------------------------
+
 local function SetupNoSpread()
     if S.noSpreadSetup or not EnsureGUILoaded() then return end
     S.noSpreadSetup = true
@@ -1431,9 +1417,7 @@ local function SetupNoSpread()
     end)
 end
 
-------------------------------------------------------------
--- SPEED
-------------------------------------------------------------
+
 local function SetupSpeed()
     if S.speedConnection then S.speedConnection:Disconnect(); S.speedConnection = nil end
     if Config.Speed.Enable and LocalPlayer.Character then
@@ -1446,9 +1430,7 @@ local function SetupSpeed()
     end
 end
 
-------------------------------------------------------------
--- MISC
-------------------------------------------------------------
+
 local function ApplyThirdPerson(state)
     pcall(function()
         LocalPlayer:SetAttribute("ThirdPerson", state)
@@ -1465,9 +1447,7 @@ local function ApplyDeviceSpoof(platform)
     end)
 end
 
-------------------------------------------------------------
--- MOBILE BUTTON
-------------------------------------------------------------
+
 local function CreateMobileButton()
     if S.mobileToggleButton then return end
     local sg = Instance.new("ScreenGui"); sg.Name = "AegisMobileButton"
@@ -1505,14 +1485,21 @@ local function DestroyMobileButton()
     if S.mobileToggleButton then S.mobileToggleButton:Destroy(); S.mobileToggleButton = nil end
 end
 
-------------------------------------------------------------
--- CHARACTER RESPAWN
-------------------------------------------------------------
+
 LocalPlayer.CharacterAdded:Connect(function(char)
     task.wait(1); EnsureGUILoaded(); SetupNoSpread(); SetupSpeed()
     S.jitterDir = 1; S.spinAngle = 0; S.armTarget = nil; S.armReturning = false;
     if Toggles.AegisStatus and Toggles.AegisStatus.Value then
         task.wait(0.5); StampAegisCharacter(char)
+    end
+    -- Re-setup ammo/cloak/shield connections (depend on PlayerGui which reloads on respawn)
+    task.wait(1)
+    if Toggles.InfCloakToggle  and Toggles.InfCloakToggle.Value  then SetupInfCloak(true)  end
+    if Toggles.InfShieldToggle and Toggles.InfShieldToggle.Value then SetupInfShield(true) end
+    for _, wtype in ipairs({"Projectile","Hitscan","Melee"}) do
+        local ut = "InfUse_"..wtype; local rt = "InfRes_"..wtype
+        if Toggles[ut] and Toggles[ut].Value then SetupProfileInfUseAmmo(wtype, true) end
+        if Toggles[rt] and Toggles[rt].Value then SetupProfileInfResAmmo(wtype, true) end
     end
 end)
 task.spawn(function() task.wait(2); EnsureGUILoaded(); SetupNoSpread()
@@ -1522,34 +1509,48 @@ task.spawn(function() task.wait(2); EnsureGUILoaded(); SetupNoSpread()
     end
 end)
 
-------------------------------------------------------------
--- DRAWING HELPERS
-------------------------------------------------------------
+
 local ESPObjects    = {}
 local ObjectESPCache = {}
 
-local FOVCircle = Drawing.new("Circle")
-FOVCircle.Thickness = 1; FOVCircle.NumSides = 64; FOVCircle.Filled = false
-FOVCircle.Visible = false; FOVCircle.Transparency = 0.8
-
-local PredictionIndicator = Drawing.new("Text")
-PredictionIndicator.Size = 24; PredictionIndicator.Center = true
-PredictionIndicator.Outline = true; PredictionIndicator.Font = 2; PredictionIndicator.Visible = false
-
--- Projectile path visualization — pool of 32 Drawing lines
-local PATH_POOL_SIZE = 32
-local PathLines = {}
-do
-    for i = 1, PATH_POOL_SIZE do
-        local ln = Drawing.new("Line")
-        ln.Thickness = 1.5; ln.Color = Color3.fromRGB(255,180,0)
-        ln.Transparency = 1; ln.Visible = false
-        PathLines[i] = ln
-    end
+-- Drawing stub: if the Drawing API isn't available yet, provide a no-op proxy
+local function NewDrawing(type)
+    if Drawing then return Drawing.new(type) end
+    -- fallback stub so nil-index errors don't cascade
+    local stub = {}; setmetatable(stub, {__index=function() return stub end, __newindex=function() end})
+    stub.Remove = function() end; stub.Visible = false
+    return stub
 end
 
+local FOVCircle = NewDrawing("Circle")
+pcall(function()
+    FOVCircle.Thickness = 1; FOVCircle.NumSides = 64; FOVCircle.Filled = false
+    FOVCircle.Visible = false; FOVCircle.Transparency = 0.8
+end)
+
+local PredictionIndicator = NewDrawing("Text")
+pcall(function()
+    PredictionIndicator.Size = 24; PredictionIndicator.Center = true
+    PredictionIndicator.Outline = true; PredictionIndicator.Font = 2; PredictionIndicator.Visible = false
+end)
+
+-- Projectile path removed
+local PATH_POOL_SIZE = 0
+local PathLines = {}
+
 local function MkDraw(t, p)
-    local d = Drawing.new(t); for k,v in pairs(p or {}) do d[k] = v end; return d
+    local d = NewDrawing(t); pcall(function() for k,v in pairs(p or {}) do d[k] = v end end); return d
+end
+
+
+-- SV: small state table to avoid chunk-level register pressure
+local SV = {
+    shotNumSetup = false,
+}
+
+
+local function IsLocalADS()
+    return S.ads and S.ads.Value == true
 end
 
 local function CreatePlayerESP(player)
@@ -1570,12 +1571,11 @@ local function CreatePlayerESP(player)
     d.Tracer            = MkDraw("Line",{Thickness=1,Visible=false})
     d.NameText          = MkDraw("Text",{Size=13,Center=true,Outline=true,Font=2,Visible=false})
     d.CheaterText       = MkDraw("Text",{Size=11,Center=true,Outline=true,Font=2,Visible=false,Color=Color3.fromRGB(255,60,60)})
-    d.DistanceText      = MkDraw("Text",{Size=7,Center=true,Outline=true,Font=2,Visible=false,Transparency=0.35})
-    d.WeaponText        = MkDraw("Text",{Size=7,Center=true,Outline=true,Font=2,Visible=false,Transparency=0.35})
-    d.ClassText         = MkDraw("Text",{Size=7,Center=true,Outline=true,Font=2,Visible=false,Transparency=0.35})
+    d.DistanceText      = MkDraw("Text",{Size=7,Center=true,Outline=true,Font=2,Visible=false})
+    d.WeaponText        = MkDraw("Text",{Size=7,Center=true,Outline=true,Font=2,Visible=false})
+    d.ClassText         = MkDraw("Text",{Size=7,Center=true,Outline=true,Font=2,Visible=false})
     d.HealthText        = MkDraw("Text",{Size=11,Center=false,Outline=true,Font=2,Visible=false})
     d.HealthPercentText = MkDraw("Text",{Size=11,Center=false,Outline=true,Font=2,Visible=false})
-    d.SightLine         = MkDraw("Line",{Thickness=1,Color=Color3.new(1,0,0),Visible=false})
     d.AegisText         = MkDraw("Text",{Size=11,Center=true,Outline=true,Font=2,Visible=false,Color=Color3.fromRGB(180,10,10)})
     for i=1,#SkeletonConnections do d.SkeletonLines[i] = MkDraw("Line",{Thickness=1,Visible=false}) end
     for attrName, info in pairs(StatusLetters) do
@@ -1593,7 +1593,7 @@ local function DestroyPlayerESP(player)
     for i=1,#SkeletonConnections do R(d.SkeletonLines[i]) end
     R(d.HealthBarBG); R(d.HealthBar); R(d.HealthDmg); R(d.HealthBarOutline)
     R(d.NameText); R(d.CheaterText); R(d.DistanceText); R(d.WeaponText); R(d.ClassText); R(d.AegisText)
-    R(d.HealthText); R(d.HealthPercentText); R(d.SightLine); R(d.Tracer); R(d.TracerOut)
+    R(d.HealthText); R(d.HealthPercentText); R(d.Tracer); R(d.TracerOut)
     for _, txt in pairs(d.StatusTexts) do R(txt) end
     ESPObjects[player] = nil
 end
@@ -1607,7 +1607,7 @@ local function HidePlayerESP(player)
     d.HealthBarBG.Visible=false; d.HealthBar.Visible=false; d.HealthDmg.Visible=false; d.HealthBarOutline.Visible=false
     d.NameText.Visible=false; d.CheaterText.Visible=false; d.DistanceText.Visible=false
     d.WeaponText.Visible=false; d.ClassText.Visible=false; d.AegisText.Visible=false
-    d.HealthText.Visible=false; d.HealthPercentText.Visible=false; d.SightLine.Visible=false
+    d.HealthText.Visible=false; d.HealthPercentText.Visible=false
     d.Tracer.Visible=false; d.TracerOut.Visible=false
     for _, txt in pairs(d.StatusTexts) do txt.Visible=false end
 end
@@ -1641,9 +1641,7 @@ local function HideObjectESP(inst)
     d.HealthText.Visible=false; d.HealthPercentText.Visible=false; d.NameText.Visible=false
 end
 
-------------------------------------------------------------
--- ESP RENDERING
-------------------------------------------------------------
+-- eazyp
 local function Get2DBox(pd)
     local sp = pd.ScreenPos; local depth = pd.Depth
     if not pd.OnScreen or depth < 1 then return nil end
@@ -1787,15 +1785,6 @@ local function UpdatePlayerESP(pd)
         end
     end
 
-    if Toggles.SightlinesToggle and Toggles.SightlinesToggle.Value and pd.Class == "Marksman" then
-        local head = char:FindFirstChild("Head")
-        if head then
-            local sS, oS = WorldToViewportPoint(head.Position); local sE, oE = WorldToViewportPoint(head.Position + head.CFrame.LookVector*500)
-            if oS or oE then d.SightLine.From=sS; d.SightLine.To=sE; d.SightLine.Color=Color3.new(1,0,0); d.SightLine.Visible=true
-            else d.SightLine.Visible=false end
-        else d.SightLine.Visible=false end
-    end
-
     if Toggles.ESPTracer and Toggles.ESPTracer.Value then
         local tracerColor = Options.ESPTracerColor and Options.ESPTracerColor.Value or color
         local originMode  = Options.ESPTracerOrigin and Options.ESPTracerOrigin.Value or "Bottom"
@@ -1820,10 +1809,7 @@ local function GetObjectBox(inst)
 end
 
 
-------------------------------------------------------------
--- BUILDING TEAM HELPER
--- Returns "enemy", "team", or "unknown" for a building model
-------------------------------------------------------------
+-- bruh building mhe tak tak tak takt aktatka tkatka tkatka tkatka
 local function GetBuildingTeam(inst)
     local ownerName = inst.Name:match("^(.+)'s ") or inst.Name:match("^(.+)'s")
     if not ownerName then return "unknown" end
@@ -1844,7 +1830,7 @@ local function UpdateObjectESP(inst, tn, overrideColor)
         d.BoxOutlines[i].From=l[i][1]; d.BoxOutlines[i].To=l[i][2]; d.BoxOutlines[i].Color=Color3.new(0,0,0); d.BoxOutlines[i].Visible=true
         d.BoxLines[i].From=l[i][1];    d.BoxLines[i].To=l[i][2];    d.BoxLines[i].Color=c;                     d.BoxLines[i].Visible=true
     end
-    d.NameText.Text=tn..": "..inst.Name; d.NameText.Position=b.Center-Vector2.new(0,b.Height/2+15); d.NameText.Color=Color3.new(1,1,1); d.NameText.Visible=true
+    d.NameText.Text=tn; d.NameText.Position=b.Center-Vector2.new(0,b.Height/2+15); d.NameText.Color=Color3.new(1,1,1); d.NameText.Visible=true
     local hum = inst:FindFirstChildOfClass("Humanoid")
     if hum then
         local hp, mh = hum.Health, hum.MaxHealth; local hf2 = math.clamp(hp/mh, 0, 1)
@@ -1859,9 +1845,7 @@ local function UpdateObjectESP(inst, tn, overrideColor)
     end
 end
 
-------------------------------------------------------------
--- CHAMS (keyed on player, handles respawns correctly)
-------------------------------------------------------------
+
 local function GetOrCreatePlayerHighlight(pd)
     local cached = PlayerChamsCache[pd.Player]
     if cached then
@@ -2015,83 +1999,17 @@ local function UpdateProjectileChams()
 end
 
 
-------------------------------------------------------------
--- GUN MOD HELPERS
-------------------------------------------------------------
-local _infUseAmmoConns   = {}  -- list of connections (multi-slot)
-local _infReserveAmmoConns = {}
-
--- "Use ammo" = clip that decrements on fire. ammocount = primary, ammocount2 = secondary
-local function SetupInfiniteUseAmmo(enabled)
-    for _, c in ipairs(_infUseAmmoConns) do pcall(function() c:Disconnect() end) end
-    _infUseAmmoConns = {}
-    if not enabled then return end
-    pcall(function()
-        local L    = LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables
-        local slots = (Options.InfUseAmmoSlot and Options.InfUseAmmoSlot.Value) or {Primary=true}
-        local pairs2 = {
-            Primary   = {ctr="ammocount",  wpn="primary"},
-            Secondary = {ctr="ammocount2", wpn="secondary"},
-        }
-        for slotName in pairs(slots) do
-            local p = pairs2[slotName]; if not p then continue end
-            local ctr  = L:FindFirstChild(p.ctr)
-            local wpnV = L:FindFirstChild(p.wpn)
-            if not (ctr and wpnV) then continue end
-            local lastVal = ctr.Value
-            local conn = ctr:GetPropertyChangedSignal("Value"):Connect(function()
-                if not (Toggles.InfUseAmmo and Toggles.InfUseAmmo.Value) then return end
-                if ctr.Value >= lastVal then lastVal = ctr.Value; return end
-                lastVal = ctr.Value
-                local wep = ReplicatedStorage.Weapons:FindFirstChild(wpnV.Value)
-                if wep and wep:FindFirstChild("Ammo") then ctr.Value = wep.Ammo.Value end
-            end)
-            table.insert(_infUseAmmoConns, conn)
-        end
-    end)
-end
-
--- "Reserve ammo" = stored/backup ammo pool. TC2 uses primarystored / secondarystored (also tries ammocount2 variants)
-local function SetupInfiniteReserveAmmo(enabled)
-    for _, c in ipairs(_infReserveAmmoConns) do pcall(function() c:Disconnect() end) end
-    _infReserveAmmoConns = {}
-    if not enabled then return end
-    pcall(function()
-        local L    = LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables
-        local slots = (Options.InfReserveAmmoSlot and Options.InfReserveAmmoSlot.Value) or {Primary=true}
-        local candidateMap = {
-            Primary   = {"primarystored","primary_stored","ammostore","ammocount4"},
-            Secondary = {"secondarystored","secondary_stored","ammostore2","ammocount3"},
-        }
-        local wpnMap = { Primary="primary", Secondary="secondary" }
-        for slotName in pairs(slots) do
-            local wpnV = L:FindFirstChild(wpnMap[slotName] or "primary")
-            local ctr
-            for _, name in ipairs(candidateMap[slotName] or {}) do
-                local v = L:FindFirstChild(name); if v then ctr = v; break end
-            end
-            if not ctr then warn("[Aegis] reserve ammo var not found for " .. tostring(slotName)); continue end
-            local lastVal = ctr.Value
-            local conn = ctr:GetPropertyChangedSignal("Value"):Connect(function()
-                if not (Toggles.InfReserveAmmo and Toggles.InfReserveAmmo.Value) then return end
-                if ctr.Value >= lastVal then lastVal = ctr.Value; return end
-                lastVal = ctr.Value
-                local wep = wpnV and ReplicatedStorage.Weapons:FindFirstChild(wpnV.Value)
-                if wep and wep:FindFirstChild("Ammo") then ctr.Value = wep.Ammo.Value end
-            end)
-            table.insert(_infReserveAmmoConns, conn)
-        end
-    end)
-end
 
 local function SetFireRateMultiplier(mult)
     pcall(function()
-        for _, wep in pairs(ReplicatedStorage.Weapons:GetChildren()) do
-            local fr = wep:FindFirstChild("FireRate")
-            if fr and WeaponSnapshot[wep.Name] and WeaponSnapshot[wep.Name].FireRate then
-                local orig = WeaponSnapshot[wep.Name].FireRate
-                fr.Value = wep:FindFirstChild("Projectile") and math.clamp(orig / mult, 0.1, 9e9) or (orig / mult)
-            end
+        local wepName = GetLocalWeapon()
+        if wepName == "Unknown" then return end
+        local wep = ReplicatedStorage.Weapons:FindFirstChild(wepName)
+        if not wep then return end
+        local fr = wep:FindFirstChild("FireRate")
+        if fr and WeaponSnapshot[wep.Name] and WeaponSnapshot[wep.Name].FireRate then
+            local orig = WeaponSnapshot[wep.Name].FireRate
+            fr.Value = wep:FindFirstChild("Projectile") and math.clamp(orig / mult, 0.1, 9e9) or (orig / mult)
         end
     end)
 end
@@ -2137,10 +2055,146 @@ local function SetMaxRange(enabled)
     end)
 end
 
-------------------------------------------------------------
--- BHOP
-------------------------------------------------------------
+-- damage mod skidded straight from ethereon
+local _dmgModOrig = nil
+local _dmgModInstalled = false
+local _dmgModFrameworks = {}
+
+local function InstallDmgMod()
+    if _dmgModInstalled then return end
+    task.spawn(function()
+        pcall(function()
+            for _, gc in next, getgc(true) do
+                if type(gc) == "table" then
+                    if not _dmgModFrameworks.Weapons then
+                        if type(rawget(gc, "returndamagemod")) == "function" then
+                            _dmgModFrameworks.Weapons = gc
+                        end
+                    end
+                end
+            end
+            if _dmgModFrameworks.Weapons then
+                _dmgModOrig = _dmgModFrameworks.Weapons.returndamagemod
+                _dmgModFrameworks.Weapons.returndamagemod = function(...)
+                    local base = _dmgModOrig(...)
+                    if Config.DmgMod.Enabled then
+                        return Config.DmgMod.Multiplier == math.huge and math.huge or base * Config.DmgMod.Multiplier
+                    end
+                    return base
+                end
+                _dmgModInstalled = true
+            end
+        end)
+    end)
+end
+
+
+local _infCloakConn = nil
+local _infShieldConn = nil
+
+local function SetupInfCloak(enabled)
+    if _infCloakConn then pcall(function() _infCloakConn:Disconnect() end); _infCloakConn = nil end
+    if not enabled then return end
+    pcall(function()
+        local L = LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables
+        local cloakleft = L:FindFirstChild("cloakleft"); if not cloakleft then return end
+        _infCloakConn = cloakleft:GetPropertyChangedSignal("Value"):Connect(function()
+            if cloakleft.Value < 10 then cloakleft.Value = 10 end
+        end)
+    end)
+end
+
+local function SetupInfShield(enabled)
+    if _infShieldConn then pcall(function() _infShieldConn:Disconnect() end); _infShieldConn = nil end
+    if not enabled then return end
+    pcall(function()
+        local L = LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables
+        local chargeleft = L:FindFirstChild("chargeleft"); if not chargeleft then return end
+        _infShieldConn = chargeleft:GetPropertyChangedSignal("Value"):Connect(function()
+            if chargeleft.Value <= 0 then
+                task.delay(0.1, function() chargeleft.Value = 100 end)
+            end
+        end)
+    end)
+end
+
+local _profileInfUseConns   = {}  -- keyed by type "Projectile","Hitscan","Melee"
+local _profileInfResConns   = {}
+
+local function SetupProfileInfUseAmmo(wtype, enabled)
+    if _profileInfUseConns[wtype] then
+        pcall(function() _profileInfUseConns[wtype]:Disconnect() end)
+        _profileInfUseConns[wtype] = nil
+    end
+    if not enabled then return end
+    pcall(function()
+        local L = LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables
+        local ctr = L:FindFirstChild("ammocount"); if not ctr then return end
+        local lastVal = ctr.Value
+        local tog = "InfUse_"..wtype
+        _profileInfUseConns[wtype] = ctr:GetPropertyChangedSignal("Value"):Connect(function()
+            if not (Toggles[tog] and Toggles[tog].Value) then return end
+            if GetWeaponType(GetLocalWeapon()) ~= wtype then return end
+            if ctr.Value >= lastVal then lastVal = ctr.Value; return end
+            lastVal = ctr.Value
+            local wep = ReplicatedStorage.Weapons:FindFirstChild(GetLocalWeapon())
+            if wep and wep:FindFirstChild("Ammo") then ctr.Value = wep.Ammo.Value end
+        end)
+    end)
+end
+
+local function SetupProfileInfResAmmo(wtype, enabled)
+    if _profileInfResConns[wtype] then
+        pcall(function() _profileInfResConns[wtype]:Disconnect() end)
+        _profileInfResConns[wtype] = nil
+    end
+    if not enabled then return end
+    pcall(function()
+        local L = LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables
+        local candidates = {"primarystored","primary_stored","ammostore","ammocount4"}
+        local ctr; for _, name in ipairs(candidates) do local v = L:FindFirstChild(name); if v then ctr = v; break end end
+        if not ctr then return end
+        local lastVal = ctr.Value
+        local tog = "InfRes_"..wtype
+        _profileInfResConns[wtype] = ctr:GetPropertyChangedSignal("Value"):Connect(function()
+            if not (Toggles[tog] and Toggles[tog].Value) then return end
+            if GetWeaponType(GetLocalWeapon()) ~= wtype then return end
+            if ctr.Value >= lastVal then lastVal = ctr.Value; return end
+            lastVal = ctr.Value
+            local wep = ReplicatedStorage.Weapons:FindFirstChild(GetLocalWeapon())
+            if wep and wep:FindFirstChild("Ammo") then ctr.Value = wep.Ammo.Value end
+        end)
+    end)
+end
+
+
+local function ApplyWeaponProfileFireRates()
+    pcall(function()
+        local wtype = GetWeaponType(GetLocalWeapon())
+        local tog = "FastGun_"..wtype
+        local opt = "FireRate_"..wtype
+        if Toggles[tog] and Toggles[tog].Value and Options[opt] then
+            SetFireRateMultiplier(Options[opt].Value)
+        end
+    end)
+end
 local _bhopHeartbeat = nil
+
+-- Fire rate: re-apply when weapon type changes
+do
+    local _lastFRWeaponType = nil
+    RunService.Heartbeat:Connect(function()
+        if Library.Unloaded then return end
+        local wtype = GetWeaponType(GetLocalWeapon())
+        if wtype ~= _lastFRWeaponType then
+            _lastFRWeaponType = wtype
+            pcall(function()
+                RestoreFireRate()
+                ApplyWeaponProfileFireRates()
+            end)
+        end
+    end)
+end
 
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed or Library.Unloaded then return end
@@ -2166,49 +2220,134 @@ UserInputService.InputBegan:Connect(function(input, processed)
     if _bhopHeartbeat then _bhopHeartbeat:Disconnect(); _bhopHeartbeat = nil end
 end)
 
-------------------------------------------------------------
--- UI — AIMBOT TAB
-------------------------------------------------------------
-do
-    local SG = Tabs.Aimbot:AddLeftGroupbox("Silent Aim", "crosshair")
-    SG:AddToggle("SilentAimToggle", { Text="Silent Aim", Default=false })
-    Toggles.SilentAimToggle:OnChanged(function() Config.SilentAim.Enabled = Toggles.SilentAimToggle.Value end)
-    SG:AddLabel("Aim Key"):AddKeyPicker("SilentAimKey", { Default="None", Mode="Hold", Text="Aim Key" })
-    SG:AddToggle("AutoShoot",     { Text="Auto Shoot", Default=false })
-    SG:AddToggle("SilentAimMobile", { Text="Always On", Default=false })
-    Toggles.SilentAimMobile:OnChanged(function()
-        if Options.SilentAimKey then Options.SilentAimKey.Mode = Toggles.SilentAimMobile.Value and "Always" or "Hold" end
-    end)
-    SG:AddToggle("SilentIgnoreInvis", { Text="Ignore Invisible", Default=true })
-    SG:AddSlider("SilentAimFOV",  { Text="FOV Radius", Default=200, Min=10, Max=800, Rounding=0 })
-    SG:AddToggle("ShowFOVCircle", { Text="Show FOV Circle", Default=true })
-    SG:AddLabel("FOV Color"):AddColorPicker("FOVColor", { Default=Color3.new(1,1,1), Title="FOV Color" })
-    SG:AddDropdown("SilentAimSort", { Values={"Closest to Mouse","Closest Distance"}, Default="Closest to Mouse", Text="Sort Mode" })
-    SG:AddDropdown("AimAtTargets", { Values={"Players","Sentry","Stickybomb"}, Default=1, Multi=true, Text="Aim At" })
-    Options.AimAtTargets:SetValue({ Players=true })
-    SG:AddDropdown("SilentAimBodyParts", { Values={"Head","Chest","Torso","Arms","Legs","Feet"}, Default=1, Multi=true, Text="Body Parts" })
-    Options.SilentAimBodyParts:SetValue({ Head=true })
-    SG:AddDivider()
-    SG:AddToggle("SilentAimArms", { Text="Aim Arms", Default=false })
-    SG:AddDropdown("SilentAimArmsMode", { Values={"Snap","Smooth"}, Default="Snap", Text="Arms Mode" })
-end
 
+
+-- Shared: Prediction Indicator
 do
     local PI = Tabs.Aimbot:AddRightGroupbox("Prediction Indicator", "activity")
     PI:AddToggle("ShowPredictionIndicator", { Text="Show Prediction Indicator", Default=false })
     PI:AddDropdown("PredictionIndicatorSymbol", { Values={"+"}, Default="+", Text="Symbol" })
     PI:AddLabel("Indicator Color"):AddColorPicker("PredictionIndicatorColor", { Default=Color3.new(0,1,1), Title="Indicator Color" })
-    PI:AddDivider()
-    PI:AddToggle("ShowProjectilePath", { Text="Show Projectile Path", Default=false,
-        Tooltip="im gonna add the prediction logic to it soon trust" })
-    PI:AddLabel("Path Color"):AddColorPicker("ProjectilePathColor", { Default=Color3.fromRGB(255,180,0), Title="Path Color" })
-    PI:AddSlider("ProjectilePathThickness", { Text="Path Thickness", Default=1.5, Min=0.5, Max=5, Rounding=1 })
+end
+
+-- Shared: FOV circle color + aim arms
+do
+    local FG = Tabs.Aimbot:AddRightGroupbox("Aim Settings", "crosshair")
+    FG:AddLabel("FOV Color"):AddColorPicker("FOVColor", { Default=Color3.new(1,1,1), Title="FOV Color" })
+    FG:AddToggle("SilentAimArms", { Text="Aim Arms", Default=false })
+    FG:AddDropdown("SilentAimArmsMode", { Values={"Snap","Smooth"}, Default="Snap", Text="Arms Mode" })
+    FG:AddDivider()
+    FG:AddLabel("Global Aim Key"):AddKeyPicker("GlobalAimKey", { Default="None", Mode="Hold", Text="Global Aim Key" })
+    FG:AddToggle("GlobalAimAlwaysOn", { Text="Global Always On", Default=false,
+        Callback=function(v)
+            if Options.GlobalAimKey then Options.GlobalAimKey.Mode = v and "Always" or "Hold" end
+        end })
+end
+
+-- Weapon Profiles tabbox — all SA settings are per-profile
+do
+    local PTB = Tabs.Aimbot:AddLeftTabbox()
+
+    -- SA block shared across all profiles
+    local function MakeSABlock(tab, wtype)
+        tab:AddToggle("SA_Enabled_"..wtype, { Text="Silent Aim", Default=false })
+        tab:AddToggle("SA_AutoShoot_"..wtype,   { Text="Auto Shoot",       Default=false })
+        tab:AddToggle("SA_IgnoreInvis_"..wtype, { Text="Ignore Invisible", Default=true })
+        tab:AddSlider("SA_FOV_"..wtype,         { Text="FOV Radius",       Default=200, Min=10, Max=800, Rounding=0 })
+        tab:AddToggle("SA_FOVCircle_"..wtype,   { Text="Show FOV Circle",  Default=true })
+        tab:AddDropdown("SA_Sort_"..wtype, { Values={"Closest to Mouse","Closest Distance"}, Default="Closest to Mouse", Text="Sort Mode" })
+        tab:AddDropdown("SA_Targets_"..wtype, { Values={"Players","Sentry","Stickybomb"}, Default=1, Multi=true, Text="Aim At" })
+        Options["SA_Targets_"..wtype]:SetValue({ Players=true })
+        tab:AddDropdown("SA_BodyParts_"..wtype, { Values={"Head","Chest","Torso","Arms","Legs","Feet"}, Default=1, Multi=true, Text="Body Parts" })
+        Options["SA_BodyParts_"..wtype]:SetValue({ Head=true })
+    end
+
+    -- Fire rate block shared across all profiles
+    local function MakeFireRateBlock(tab, wtype)
+        tab:AddToggle("FastGun_"..wtype, { Text="Fast Gun", Default=false,
+            Callback=function(v)
+                if not v then RestoreFireRate() else ApplyWeaponProfileFireRates() end
+            end })
+        tab:AddSlider("FireRate_"..wtype, { Text="Fire Rate", Default=1, Min=1, Max=25, Rounding=1, Suffix="x",
+            Callback=function(v)
+                if Toggles["FastGun_"..wtype] and Toggles["FastGun_"..wtype].Value
+                   and GetWeaponType(GetLocalWeapon()) == wtype then
+                    SetFireRateMultiplier(v)
+                end
+            end })
+    end
+
+    -- DmgMod block (Hitscan + Melee only)
+    local function MakeDmgModBlock(tab, wtype)
+        tab:AddToggle("DmgMod_"..wtype, { Text="Damage Mod", Default=false,
+            Callback=function(v)
+                Config.DmgMod.Enabled = v and GetWeaponType(GetLocalWeapon()) == wtype
+                if v and not _dmgModInstalled then InstallDmgMod() end
+            end })
+        tab:AddSlider("DmgModMult_"..wtype, { Text="Dmg Multiplier", Default=3, Min=1, Max=10, Rounding=1, Suffix="x",
+            Callback=function(v) Config.DmgMod.Multiplier = v end })
+        tab:AddToggle("DmgModInf_"..wtype, { Text="Infinite Damage", Default=false,
+            Callback=function(v)
+                if v then Config.DmgMod.Multiplier = math.huge
+                else Config.DmgMod.Multiplier = Options["DmgModMult_"..wtype].Value end
+            end })
+    end
+
+    -- Inf Ammo block shared across all profiles
+    local function MakeInfAmmoBlock(tab, wtype)
+        tab:AddToggle("InfUse_"..wtype, { Text="Inf Use Ammo", Default=false,
+            Callback=function(v) SetupProfileInfUseAmmo(wtype, v) end })
+        tab:AddToggle("InfRes_"..wtype, { Text="Inf Reserve Ammo", Default=false,
+            Callback=function(v) SetupProfileInfResAmmo(wtype, v) end })
+    end
+
+    -- PROJECTILE: SA + fire rate + inf ammo (no dmg mod)
+    local PT = PTB:AddTab("Projectile")
+    MakeSABlock(PT, "Projectile")
+    PT:AddDivider()
+    MakeFireRateBlock(PT, "Projectile")
+    PT:AddDivider()
+    MakeInfAmmoBlock(PT, "Projectile")
+
+    -- HITSCAN: SA + fire rate + dmg mod + wallbang + inf ammo
+    local HT = PTB:AddTab("Hitscan")
+    MakeSABlock(HT, "Hitscan")
+    HT:AddDivider()
+    MakeFireRateBlock(HT, "Hitscan")
+    HT:AddDivider()
+    MakeDmgModBlock(HT, "Hitscan")
+    HT:AddDivider()
+    HT:AddToggle("WallbangToggle", { Text="Wallbang", Default=false,
+        Callback=function(v)
+            Config.Wallbang.Enable = v
+            if v then InstallWallbangHook() else RemoveWallbangHook() end
+        end })
+    HT:AddDivider()
+    MakeInfAmmoBlock(HT, "Hitscan")
+
+    -- MELEE: SA + fire rate + dmg mod + melee range + backstab + auto melee + inf ammo
+    local MT = PTB:AddTab("Melee")
+    MakeSABlock(MT, "Melee")
+    MT:AddDivider()
+    MakeFireRateBlock(MT, "Melee")
+    MT:AddDivider()
+    MakeDmgModBlock(MT, "Melee")
+    MT:AddDivider()
+    MT:AddToggle("MaxRangeToggle", { Text="Infinite Range", Default=false,
+        Tooltip="thank skibidisigmaboy89",
+        Callback=function(v) SetMaxRange(v) end })
+    MT:AddToggle("AutoBackstab",        { Text="Auto Backstab",    Default=false })
+    MT:AddToggle("BackstabIgnoreInvis", { Text="Ignore Invisible", Default=true })
+    MT:AddToggle("AutoWarp",            { Text="Auto Warp Behind", Default=false })
+    MT:AddLabel("Warp Key"):AddKeyPicker("WarpKey", { Default="None", Mode="Toggle", Text="Warp" })
+    MT:AddDivider()
+    MT:AddToggle("AutoMelee",        { Text="Auto Melee",       Default=false })
+    MT:AddToggle("MeleeIgnoreInvis", { Text="Ignore Invisible", Default=true })
+    MT:AddDropdown("AutoMeleeMode",  { Values={"Rage","Demoknight"}, Default="Rage", Text="Melee Mode" })
 end
 
 
-------------------------------------------------------------
--- UI — VISUALS TAB
-------------------------------------------------------------
+
 do
     local ETB  = Tabs.Visuals:AddLeftTabbox()
     local ESPT = ETB:AddTab("Player ESP")
@@ -2353,26 +2492,14 @@ end
 local OL
 do
     local VR = Tabs.Visuals:AddRightGroupbox("World Visuals", "sun")
-    VR:AddInput("SkyboxID", { Default="", Numeric=true, Finished=true, Text="Skybox ID", Placeholder="Asset ID" })
     VR:AddSlider("TimeSlider", { Text="Time of Day", Default=12, Min=0, Max=24, Rounding=1, Suffix=" hrs" })
     VR:AddLabel("Ambient"):AddColorPicker("AmbientColor", { Default=Lighting.Ambient, Title="Ambient" })
     VR:AddToggle("FullbrightToggle", { Text="Fullbright",          Default=false })
     VR:AddToggle("NoFogToggle",      { Text="No Fog",              Default=false })
-    VR:AddToggle("SightlinesToggle", { Text="Marksman Sightlines", Default=false })
 
     OL = {Ambient=Lighting.Ambient, Brightness=Lighting.Brightness, FogEnd=Lighting.FogEnd,
           FogStart=Lighting.FogStart, ClockTime=Lighting.ClockTime, OutdoorAmbient=Lighting.OutdoorAmbient}
 
-    local function ApplySkybox(id)
-        if id == "" then return end
-        pcall(function()
-            local sk = Lighting:FindFirstChildOfClass("Sky")
-            if not sk then sk = Instance.new("Sky"); sk.Parent = Lighting end
-            local a = "rbxassetid://"..id
-            sk.SkyboxBk=a; sk.SkyboxDn=a; sk.SkyboxFt=a; sk.SkyboxLf=a; sk.SkyboxRt=a; sk.SkyboxUp=a
-        end)
-    end
-    Options.SkyboxID:OnChanged(function() ApplySkybox(Options.SkyboxID.Value) end)
     Options.TimeSlider:OnChanged(function() Lighting.ClockTime = Options.TimeSlider.Value end)
     Options.AmbientColor:OnChanged(function()
         if not Toggles.FullbrightToggle.Value then Lighting.Ambient=Options.AmbientColor.Value; Lighting.OutdoorAmbient=Options.AmbientColor.Value end
@@ -2386,7 +2513,6 @@ do
         else Lighting.FogEnd=OL.FogEnd; Lighting.FogStart=OL.FogStart end
     end)
     task.spawn(function() while true do task.wait(1); if Library.Unloaded then break end
-        if Options.SkyboxID.Value ~= "" then ApplySkybox(Options.SkyboxID.Value) end
         Lighting.ClockTime = Options.TimeSlider.Value
         if Toggles.FullbrightToggle.Value then Lighting.Brightness=2; Lighting.Ambient=Color3.new(1,1,1); Lighting.OutdoorAmbient=Color3.new(1,1,1)
         else Lighting.Ambient=Options.AmbientColor.Value; Lighting.OutdoorAmbient=Options.AmbientColor.Value end
@@ -2394,9 +2520,7 @@ do
     end end)
 end
 
-------------------------------------------------------------
--- UI — MISC TAB
-------------------------------------------------------------
+
 do
     local ML = Tabs.Misc:AddLeftGroupbox("Misc", "wrench")
     ML:AddToggle("AegisStatus", { Text="Aegis Status", Default=false,
@@ -2415,15 +2539,11 @@ do
     ML:AddToggle("AutoBhop",     { Text="Auto Bhop",      Default=false })
     ML:AddToggle("NoFallDamage", { Text="No Fall Damage", Default=false })
     ML:AddDivider()
-    -- Backstab / Melee
-    ML:AddToggle("AutoBackstab",        { Text="Auto Backstab",    Default=false })
-    ML:AddToggle("BackstabIgnoreInvis", { Text="Ignore Invisible", Default=true })
-    ML:AddToggle("AutoWarp",            { Text="Auto Warp Behind", Default=false })
-    ML:AddLabel("Warp Key"):AddKeyPicker("WarpKey", { Default="None", Mode="Toggle", Text="Warp" })
-    ML:AddDivider()
-    ML:AddToggle("AutoMelee",        { Text="Auto Melee",            Default=false })
-    ML:AddToggle("MeleeIgnoreInvis", { Text="Ignore Invisible", Default=true })
-    ML:AddDropdown("AutoMeleeMode",  { Values={"Rage","Demoknight"}, Default="Rage", Text="Melee Mode" })
+    -- Spy
+    ML:AddToggle("InfCloakToggle", { Text="Infinite Cloak", Default=false,
+        Callback=function(v) SetupInfCloak(v) end })
+    ML:AddToggle("InfShieldToggle", { Text="Infinite Shield", Default=false,
+        Callback=function(v) SetupInfShield(v) end })
 end
 
 do
@@ -2434,6 +2554,13 @@ do
         Callback=function(v) ApplyThirdPerson(v) end })
     MR:AddToggle("HealSelfToggle",  { Text="Heal Self [Medic]", Default=false })
     MR:AddLabel("Heal Self Bind"):AddKeyPicker("HealSelfKey", { Default="None", Mode="Toggle", Text="Heal Self" })
+    MR:AddDivider()
+    -- VIP Settings
+    MR:AddToggle("VIPNoAutoSort",    { Text="No Autobalance",    Default=false })
+    MR:AddToggle("VIPNoRespawnTime", { Text="No Respawn Time",   Default=false })
+    MR:AddToggle("VIPNoClassLimits", { Text="No Class Limits",   Default=false })
+    MR:AddToggle("VIPNoTeamLimits",  { Text="No Team Limits",    Default=false })
+    MR:AddToggle("VIPSpeedDemon",    { Text="Speed Demon (Bhop)", Default=false })
     MR:AddDivider()
     -- Device Spoofer
     MR:AddToggle("DeviceSpoofEnabled", { Text="Device Spoofer", Default=false,
@@ -2475,9 +2602,7 @@ do
     Options.AutoUberCondition:OnChanged(function() Config.AutoUber.Condition = Options.AutoUberCondition.Value end)
 end
 
-------------------------------------------------------------
--- UI — EXPLOITS TAB
-------------------------------------------------------------
+
 do
     local EL = Tabs.Exploits:AddLeftGroupbox("Exploits", "zap")
 
@@ -2489,11 +2614,6 @@ do
     EL:AddSlider("SpinSpeed",   { Text="Spin Speed",   Default=180, Min=1,   Max=1080, Rounding=0, Callback=function(v) Config.AntiAim.AntiAimSpeed=v end })
     EL:AddDivider()
 
-    EL:AddToggle("WallbangToggle", { Text="Wallbang", Default=false, Tooltip="Broken rn",
-        Callback=function(v)
-            Config.Wallbang.Enable = v
-            if v then InstallWallbangHook() else RemoveWallbangHook() end
-        end })
     EL:AddToggle("NoSpreadToggle", { Text="No Spread", Default=false,
         Callback=function(v)
             Config.NoSpread.Enable = v
@@ -2520,56 +2640,28 @@ do
     TL:AddLabel("Telestab Bind"):AddKeyPicker("TelestabKey", { Default="None", Mode="Hold", Text="Telestab" })
 end
 
-do
-    local GM = Tabs.Exploits:AddRightGroupbox("Gun Mods", "package")
-    -- Infinite Use Ammo (clip/magazine that decrements when firing)
-    GM:AddToggle("InfUseAmmo", { Text="Infinite Use Ammo", Default=false,
-        Tooltip="Resets clip to max whenever it decreases. Use dropdown to choose which slot(s).",
-        Callback=function(v) SetupInfiniteUseAmmo(v) end })
-    GM:AddDropdown("InfUseAmmoSlot", { Values={"Primary","Secondary"}, Default=1, Multi=true, Text="Use Ammo Slot" })
-    Options.InfUseAmmoSlot:SetValue({ Primary=true })
-    Options.InfUseAmmoSlot:OnChanged(function()
-        if Toggles.InfUseAmmo and Toggles.InfUseAmmo.Value then SetupInfiniteUseAmmo(true) end
-    end)
-    GM:AddDivider()
-    -- Infinite Reserve Ammo (stored/backup pool)
-    GM:AddToggle("InfReserveAmmo", { Text="Infinite Reserve Ammo", Default=false,
-        Tooltip="Resets stored reserve whenever it decreases. Use dropdown to choose which slot(s).",
-        Callback=function(v) SetupInfiniteReserveAmmo(v) end })
-    GM:AddDropdown("InfReserveAmmoSlot", { Values={"Primary","Secondary"}, Default=1, Multi=true, Text="Reserve Ammo Slot" })
-    Options.InfReserveAmmoSlot:SetValue({ Primary=true })
-    Options.InfReserveAmmoSlot:OnChanged(function()
-        if Toggles.InfReserveAmmo and Toggles.InfReserveAmmo.Value then SetupInfiniteReserveAmmo(true) end
-    end)
-    GM:AddDivider()
-    GM:AddToggle("FastGun", { Text="Fast Gun", Default=false,
-        Callback=function(v)
-            if v then SetFireRateMultiplier(Options.FireRateMultiplier.Value)
-            else RestoreFireRate() end
-        end })
-    GM:AddSlider("FireRateMultiplier", { Text="Fire Rate", Default=1, Min=1, Max=25, Rounding=1, Suffix="x",
-        Callback=function(v)
-            if Toggles.FastGun and Toggles.FastGun.Value then SetFireRateMultiplier(v) end
-        end })
-    GM:AddDivider()
-    GM:AddToggle("AutomaticToggle", { Text="Automatic", Default=false,
-        Callback=function(v) SetAutomatic(v) end })
-    GM:AddToggle("MaxRangeToggle", { Text="hitscan melee", Default=false,
-        Tooltip="thank skibidisigmaboy89",
-        Callback=function(v) SetMaxRange(v) end })
-end
+task.spawn(InstallDmgMod)
 
 task.spawn(function() while true do task.wait(2); if Library.Unloaded then break end
     pcall(function()
         if Toggles.NoVoiceCooldown and Toggles.NoVoiceCooldown.Value then ReplicatedStorage.VIPSettings.NoVoiceCooldown.Value=true end
         if Toggles.ThirdPersonMode and Toggles.ThirdPersonMode.Value then local v=ReplicatedStorage:FindFirstChild("VIPSettings"); if v then local t=v:FindFirstChild("AThirdPersonMode"); if t then t.Value=true end end end
         if Toggles.DeviceSpoofEnabled and Toggles.DeviceSpoofEnabled.Value then ApplyDeviceSpoof(Options.DeviceSpoofer.Value) end
+        -- VIP Settings
+        local vip = ReplicatedStorage:FindFirstChild("VIPSettings")
+        if vip then
+            if Toggles.VIPNoAutoSort    and Toggles.VIPNoAutoSort.Value    then pcall(function() vip.NoAutoSort.Value=true    end) end
+            if Toggles.VIPNoRespawnTime and Toggles.VIPNoRespawnTime.Value then pcall(function() vip.NoRespawnTime.Value=true  end) end
+            if Toggles.VIPNoClassLimits and Toggles.VIPNoClassLimits.Value then pcall(function() vip.NoClassLimits.Value=true  end) end
+            if Toggles.VIPNoTeamLimits  and Toggles.VIPNoTeamLimits.Value  then pcall(function() vip.NoTeamLimits.Value=true   end) end
+            if Toggles.VIPSpeedDemon    and Toggles.VIPSpeedDemon.Value    then pcall(function() vip.SpeedDemon.Value=true     end) end
+        end
+        -- Per-weapon-type fire rates
+        ApplyWeaponProfileFireRates()
     end)
 end end)
 
-------------------------------------------------------------
--- UI — SETTINGS TAB
-------------------------------------------------------------
+
 do
     local SL = Tabs.Settings:AddLeftGroupbox("FOV", "maximize")
     SL:AddToggle("CustomFOV", { Text="Custom FOV", Default=false })
@@ -2584,14 +2676,11 @@ do
     MG:AddToggle("MobileModeToggle", { Text="Mobile Mode", Default=isMobileDevice })
     Toggles.MobileModeToggle:OnChanged(function()
         isMobileMode = Toggles.MobileModeToggle.Value
-        if isMobileMode then CreateMobileButton() else DestroyMobileButton() end
     end)
     if isMobileDevice then task.defer(function() task.wait(1); if Toggles.MobileModeToggle then Toggles.MobileModeToggle:SetValue(true) end end) end
 end
 
-------------------------------------------------------------
--- AUTOMATION LOGIC
-------------------------------------------------------------
+
 local function UpdateUsernameHider()
     if not Toggles.UsernameHider.Value then return end
     if tick()-S.lastUsernameUpdate < 1 then return end; S.lastUsernameUpdate = tick()
@@ -2678,15 +2767,31 @@ local function RunAutoAirblast()
 end
 
 local function RunSilentAimLogic()
-    if not Config.SilentAim.Enabled then S.silentAimKeyActive = false; return end
-    S.silentAimKeyActive = isMobileMode or Options.SilentAimKey:GetState()
+    -- Dead check: don't aim/shoot while dead
+    do
+        local char = LocalPlayer.Character
+        if char then
+            local deadVal = char:FindFirstChild("Dead")
+            if deadVal and deadVal.Value == true then
+                S.silentAimKeyActive = false; S.shooting = false; return
+            end
+        end
+    end
+
+    local prof = GetActiveSAProfile()
+    local saEnabled = Toggles[prof.enabled] and Toggles[prof.enabled].Value
+    Config.SilentAim.Enabled = saEnabled or false
+    if not Config.SilentAim.Enabled then S.silentAimKeyActive = false
+        S.shooting = false
+        return
+    end
+    -- Key check: Global aim key only (replaces per-profile keys)
+    local globalAlwaysOn = Toggles.GlobalAimAlwaysOn and Toggles.GlobalAimAlwaysOn.Value
+    local globalKeyActive = globalAlwaysOn or (Options.GlobalAimKey and Options.GlobalAimKey:GetState()) or false
+    S.silentAimKeyActive = isMobileMode or globalKeyActive
 
     if not S.silentAimKeyActive then
-        if S.shooting then
-            if isMobileMode then pcall(function() LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables.Held1.Value=false end)
-            else VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0) end
-            S.shooting = false
-        end
+        S.shooting = false
         return
     end
 
@@ -2694,23 +2799,11 @@ local function RunSilentAimLogic()
     local weapon = GetLocalWeapon(); if BlacklistedWeapons[weapon] then return end
 
     local target = FrameCache.silentTarget
-    if target and Toggles.AutoShoot and Toggles.AutoShoot.Value then
-        if isMobileMode then
-            pcall(function()
-                local L = LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables
-                if not L.Held1.Value then L.Held1.Value=true; S.shooting=true; S.lastShotTime=tick() end
-            end)
-        else
-            if not S.shooting then
-                VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,0); S.shooting=true; S.lastShotTime=tick()
-            elseif tick()-S.lastShotTime >= S.shotInterval then
-                VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0)
-                VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,0); S.lastShotTime=tick()
-            end
+    if target and Toggles[prof.autoShoot] and Toggles[prof.autoShoot].Value then
+        if tick()-S.lastShotTime >= S.shotInterval then
+            FireShot(); S.shooting=true; S.lastShotTime=tick()
         end
-    elseif not target and S.shooting then
-        if isMobileMode then pcall(function() LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables.Held1.Value=false end)
-        else VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0) end
+    elseif not target then
         S.shooting = false
     end
 end
@@ -2765,11 +2858,8 @@ local function RunAutoBackstab(playerData)
             if not HasLineOfSight(lh.Position, pd.HRP.Position) then continue end
             foundTarget = true
             if S.lastBackstabTarget ~= pd.Player then S.lastBackstabTarget=pd.Player; Notify("Backstab: "..pd.Player.Name, 2) end
-            if not S.shooting then
-                VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,0); S.shooting=true; S.lastShotTime=tick()
-            elseif tick()-S.lastShotTime >= 0.15 then
-                VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0)
-                VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,0); S.lastShotTime=tick()
+            if tick()-S.lastShotTime >= 0.15 then
+                FireShot(); S.shooting=true; S.lastShotTime=tick()
             end; break
         end
     end
@@ -2787,11 +2877,8 @@ local function RunAutoMelee(playerData)
         if Toggles.MeleeIgnoreInvis.Value and IsCharacterInvisible(pd.Character) then continue end
         if not HasLineOfSight(lh.Position, pd.HRP.Position) then continue end
         S.lastMeleeTarget = pd.Player
-        if not S.shooting then
-            VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,0); S.shooting=true; S.lastShotTime=tick()
-        elseif tick()-S.lastShotTime >= 0.15 then
-            VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0)
-            VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,0); S.lastShotTime=tick()
+        if tick()-S.lastShotTime >= 0.15 then
+            FireShot(); S.shooting=true; S.lastShotTime=tick()
         end; return
     end
     S.lastMeleeTarget = nil
@@ -2804,87 +2891,16 @@ local function RunAutoSticky(playerData)
         for _, pd in ipairs(playerData) do
             if pd.IsEnemy and (sticky.Position-pd.HRP.Position).Magnitude <= 10 then
                 if not (Toggles.AutoStickyVisibleOnly and Toggles.AutoStickyVisibleOnly.Value) or IsPartVisible(sticky) then
-                    VirtualInputManager:SendMouseButtonEvent(0,0,1,true,game,0); task.wait(0.05); VirtualInputManager:SendMouseButtonEvent(0,0,1,false,game,0); return
+                        pcall(function()
+                            local L = LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables
+                            L.Held2.Value = true; task.wait(0.05); L.Held2.Value = false
+                        end); return
                 end
             end
         end
     end
 end
 
-------------------------------------------------------------
--- PROJECTILE PATH VISUALIZATION
-------------------------------------------------------------
-local function HidePathLines(fromIdx)
-    for i = (fromIdx or 1), PATH_POOL_SIZE do
-        PathLines[i].Visible = false
-    end
-end
-
-local function RunProjectilePath()
-    if not (Toggles.ShowProjectilePath and Toggles.ShowProjectilePath.Value and Config.SilentAim.Enabled and S.silentAimKeyActive) then
-        HidePathLines(); return
-    end
-    local weapon = GetLocalWeapon()
-    local pd     = ProjectileWeapons[weapon] or ChargeWeapons[weapon]
-    if not pd then HidePathLines(); return end
-
-    local target    = FrameCache.silentTarget
-    local targetPlr = FrameCache.silentTargetPlr
-    if not target or not targetPlr then HidePathLines(); return end
-
-    local speed, gravity, initAngle, _, lifetime = GetCurrentWeaponSpeed(weapon)
-    if not speed then HidePathLines(); return end
-
-    local origin  = (Camera.CFrame * CFrame.new(PROJECTILE_OFFSET)).Position
-    local targetPos = target.Position
-
-    -- determine aim direction (with arc compensation)
-    local aimPoint = gravity > 0 and CalculateAimPoint(origin, targetPos, speed, gravity, weapon) or targetPos
-    local aimDir   = (aimPoint - origin)
-    if aimDir.Magnitude < 0.1 then HidePathLines(); return end
-    aimDir = aimDir.Unit
-
-    local hDir = Vector3.new(aimDir.X, 0, aimDir.Z)
-    if hDir.Magnitude < 0.01 then HidePathLines(); return end
-    hDir = hDir.Unit
-
-    local pitch      = math.asin(math.clamp(aimDir.Y, -1, 1))
-    local totalAngle = pitch + math.rad(initAngle or 0)
-    local hSpeed     = speed * math.cos(totalAngle)
-    local vSpeed     = speed * math.sin(totalAngle)
-
-    local hDist   = Vector3.new(targetPos.X-origin.X, 0, targetPos.Z-origin.Z).Magnitude
-    local totalTime = math.min(hDist / math.max(hSpeed, 1), lifetime or 99)
-
-    local steps = PATH_POOL_SIZE  -- one segment per pool line
-    local col   = Options.ProjectilePathColor and Options.ProjectilePathColor.Value or Color3.fromRGB(255,180,0)
-    local thick = Options.ProjectilePathThickness and Options.ProjectilePathThickness.Value or 1.5
-
-    local prevSP, prevOnScreen
-    local usedLines = 0
-
-    for i = 0, steps do
-        local t    = (i / steps) * totalTime
-        local hPos = origin + hDir * (hSpeed * t)
-        local yPos = origin.Y + vSpeed * t - 0.5 * (gravity or 0) * t * t
-        local worldPt = Vector3.new(hPos.X, yPos, hPos.Z)
-        local sp, onScreen = WorldToViewportPoint(worldPt)
-
-        if prevSP and i > 0 then
-            usedLines = usedLines + 1
-            if usedLines <= PATH_POOL_SIZE then
-                local ln = PathLines[usedLines]
-                local vis = prevOnScreen or onScreen
-                ln.From = prevSP; ln.To = sp
-                ln.Color = col; ln.Thickness = thick
-                ln.Visible = vis
-            end
-        end
-        prevSP = sp; prevOnScreen = onScreen
-    end
-
-    HidePathLines(usedLines + 1)
-end
 
 local function RunPredictionIndicator()
     if not (Toggles.ShowPredictionIndicator and Toggles.ShowPredictionIndicator.Value and Config.SilentAim.Enabled and S.silentAimKeyActive) then
@@ -2908,9 +2924,7 @@ local function RunPredictionIndicator()
     PredictionIndicator.Visible = false
 end
 
-------------------------------------------------------------
--- HEAL SELF
-------------------------------------------------------------
+
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed or Library.Unloaded then return end
     if Toggles.HealSelfToggle.Value then
@@ -2922,10 +2936,8 @@ UserInputService.InputBegan:Connect(function(input, processed)
     end
 end)
 
-------------------------------------------------------------
--- HIT TRACKING (health cache only — notification UI removed)
-------------------------------------------------------------
-do
+
+task.defer(function()
     local function TrackCharacter(plr)
         if plr == LocalPlayer then return end
         local char = plr.Character; if not char then return end
@@ -2942,7 +2954,7 @@ do
     Players.PlayerAdded:Connect(function(plr)
         plr.CharacterAdded:Connect(function() task.wait(0.3); TrackCharacter(plr) end)
     end)
-end
+end)
 
 LogService.MessageOut:Connect(function(message)
     if type(message) ~= "string" then return end
@@ -2951,10 +2963,8 @@ LogService.MessageOut:Connect(function(message)
     end
 end)
 
-------------------------------------------------------------
--- CHEATER DETECTOR
-------------------------------------------------------------
-do
+
+task.defer(function()
     local notifiedCheaters = {}
     local function CheckCheater(player)
         if player == LocalPlayer then return end
@@ -2971,12 +2981,10 @@ do
         end
     end)
     Players.PlayerRemoving:Connect(function(p) notifiedCheaters[p.UserId] = nil end)
-end
+end)
 
-------------------------------------------------------------
--- MOD / STAFF DETECTOR
-------------------------------------------------------------
-do
+
+task.defer(function()
     local STAFF_ATTRS = {
         "IsGroupCoder","IsGroupContributor","IsGroupDeveloper",
         "IsGroupMapper","IsGroupModerator","IsGroupTester",
@@ -3020,64 +3028,127 @@ do
     for _, p in ipairs(cachedPlayerList) do SetupPlayer(p) end
     Players.PlayerAdded:Connect(SetupPlayer)
     Players.PlayerRemoving:Connect(function(p) alreadyNotified[p.UserId] = nil end)
+end)
+
+
+local AccChamsCache = {}  -- [player] = Highlight on their equipped Tool
+local _weaponOutlineHL = nil  -- unused, kept for unload compat
+
+local function UpdateAccChams()
+    if not (Toggles.ChamsEnabled and Toggles.ChamsEnabled.Value) then
+        for p, hl in pairs(AccChamsCache) do
+            pcall(function() hl.Enabled = false end)
+        end
+        return
+    end
+    local seen = {}
+    for _, pd in ipairs(FrameCache.playerData or {}) do
+        if pd.Player == LocalPlayer then continue end
+        local char = pd.Character
+        if not char then continue end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then
+            if AccChamsCache[pd.Player] then pcall(function() AccChamsCache[pd.Player].Enabled=false end) end
+            continue
+        end
+        -- Check show conditions same as player chams
+        if pd.IsEnemy and not (Toggles.ChamsShowEnemy and Toggles.ChamsShowEnemy.Value) then
+            if AccChamsCache[pd.Player] then pcall(function() AccChamsCache[pd.Player].Enabled=false end) end
+            continue
+        end
+        if not pd.IsEnemy and pd.IsFriend and not (Toggles.ChamsShowFriend and Toggles.ChamsShowFriend.Value) then
+            if AccChamsCache[pd.Player] then pcall(function() AccChamsCache[pd.Player].Enabled=false end) end
+            continue
+        end
+        if not pd.IsEnemy and not pd.IsFriend and not (Toggles.ChamsShowTeam and Toggles.ChamsShowTeam.Value) then
+            if AccChamsCache[pd.Player] then pcall(function() AccChamsCache[pd.Player].Enabled=false end) end
+            continue
+        end
+        local tool = char:FindFirstChildOfClass("Tool")
+        if not tool then
+            if AccChamsCache[pd.Player] then pcall(function() AccChamsCache[pd.Player].Enabled=false end) end
+            continue
+        end
+        seen[pd.Player] = true
+        -- Re-create highlight if needed (new tool or missing)
+        local hl = AccChamsCache[pd.Player]
+        if not hl or not hl.Parent or hl.Adornee ~= tool then
+            if hl then pcall(function() hl:Destroy() end) end
+            local ok, newhl = pcall(function()
+                local h = Instance.new("Highlight")
+                h.Name = "AegisWeaponOutline"; h.Adornee = tool; h.Parent = tool
+                h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                return h
+            end)
+            AccChamsCache[pd.Player] = ok and newhl or nil
+            hl = AccChamsCache[pd.Player]
+        end
+        if not hl then continue end
+        -- Pick color based on team/friend
+        local fc, oc, ft, ot
+        if pd.IsFriend then
+            fc=Options.ChamsFriendColor.Value; oc=Options.ChamsFriendOutline.Value
+            ft=Options.ChamsFriendTrans.Value; ot=Options.ChamsFriendOutlineTrans.Value
+        elseif pd.IsEnemy then
+            fc=Options.ChamsEnemyColor.Value; oc=Options.ChamsEnemyOutline.Value
+            ft=Options.ChamsEnemyTrans.Value; ot=Options.ChamsEnemyOutlineTrans.Value
+        else
+            fc=Options.ChamsTeamColor.Value; oc=Options.ChamsTeamOutline.Value
+            ft=Options.ChamsTeamTrans.Value; ot=Options.ChamsTeamOutlineTrans.Value
+        end
+        pcall(function()
+            hl.FillColor=fc; hl.OutlineColor=oc
+            hl.FillTransparency=ft; hl.OutlineTransparency=ot
+            hl.Enabled=true
+        end)
+    end
+    -- Disable highlights for players no longer visible
+    for p, hl in pairs(AccChamsCache) do
+        if not seen[p] then pcall(function() hl.Enabled=false end) end
+    end
 end
 
-------------------------------------------------------------
--- MAIN RENDER LOOP
-------------------------------------------------------------
-local MainConnection = RunService.RenderStepped:Connect(function(dt)
-    if Library.Unloaded then return end
-    Camera = Workspace.CurrentCamera
-    S.frames = S.frames + 1
-    visibilityCache = {}
 
-    FrameCache.camPos      = Camera.CFrame.Position
-    FrameCache.camCF       = Camera.CFrame
-    FrameCache.screenCenter = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-    FrameCache.frameNum    = FrameCache.frameNum + 1
+local RH = {}
 
-    EnsureGUILoaded()
-    UpdateVelocityTracking()
-
-
-    if S.isCharging then
-        local w = GetLocalWeapon(); local cd = ChargeWeapons[w]
-        if cd then S.currentChargePercent = math.clamp((tick()-S.chargeStartTime)/cd.ChargeTime, 0, 1) end
-    end
-
-    FrameCache.playerData   = BuildPlayerData()
-    FrameCache.silentTarget, FrameCache.silentTargetPlr = GetSilentAimTarget(FrameCache.playerData)
-
-    local playerData = FrameCache.playerData
-
-    RunSilentAimLogic()
-    RunAutoWarp(playerData)
-    UpdateAimArms()
-
-    -- FOV circle
-    if Toggles.ShowFOVCircle and Toggles.ShowFOVCircle.Value and Config.SilentAim.Enabled then
-        FOVCircle.Position = FrameCache.screenCenter; FOVCircle.Radius = Options.SilentAimFOV.Value
-        FOVCircle.Color    = Options.FOVColor.Value;   FOVCircle.Visible = true
-    else FOVCircle.Visible = false end
-
-    RunProjectilePath()
-    RunPredictionIndicator()
-
-    -- Player ESP & Chams
-    do
-        local processed = {}
-        for _, pd in ipairs(playerData) do
-            processed[pd.Player] = true
-            if Toggles.ESPEnabled.Value then CreatePlayerESP(pd.Player); UpdatePlayerESP(pd) else HidePlayerESP(pd.Player) end
-            UpdatePlayerChams(pd)
+function RH.UpdateDmgMod()
+    local wtype = GetWeaponType(GetLocalWeapon())
+    local tog = "DmgMod_"..wtype
+    Config.DmgMod.Enabled = Toggles[tog] and Toggles[tog].Value or false
+    if Config.DmgMod.Enabled then
+        local infTog = "DmgModInf_"..wtype
+        if Toggles[infTog] and Toggles[infTog].Value then
+            Config.DmgMod.Multiplier = math.huge
+        else
+            local opt = "DmgModMult_"..wtype
+            Config.DmgMod.Multiplier = Options[opt] and Options[opt].Value or 3
         end
-        for p in pairs(ESPObjects) do if not processed[p] then HidePlayerESP(p) end end
     end
+end
 
-    -- Object ESP
+function RH.UpdateFOVCircle()
+    local _prof = GetActiveSAProfile()
+    if Config.SilentAim.Enabled and Toggles[_prof.fovCircle] and Toggles[_prof.fovCircle].Value then
+        local _fov = Options[_prof.fov] and Options[_prof.fov].Value or 200
+        FOVCircle.Position = FrameCache.screenCenter; FOVCircle.Radius = _fov
+        FOVCircle.Color    = Options.FOVColor and Options.FOVColor.Value or Color3.new(1,1,1)
+        FOVCircle.Visible = true
+    else FOVCircle.Visible = false end
+end
+
+function RH.UpdatePlayerESP(playerData)
+    local processed = {}
+    for _, pd in ipairs(playerData) do
+        processed[pd.Player] = true
+        if Toggles.ESPEnabled.Value then CreatePlayerESP(pd.Player); UpdatePlayerESP(pd) else HidePlayerESP(pd.Player) end
+        UpdatePlayerChams(pd)
+    end
+    for p in pairs(ESPObjects) do if not processed[p] then HidePlayerESP(p) end end
+end
+
+function RH.UpdateObjectESP()
     if Toggles.ObjESPEnabled.Value then
         local act = {}
-        -- Buildings: split by enemy/team
         local function PBuilding(cache, enemyTog, teamTog, label)
             for _, o in pairs(cache) do
                 if not o.Parent then continue end
@@ -3092,7 +3163,6 @@ local MainConnection = RunService.RenderStepped:Connect(function(dt)
         PBuilding(cachedSentries,    Toggles.ObjESPEnemySentry,    Toggles.ObjESPTeamSentry,    "Sentry")
         PBuilding(cachedDispensers,  Toggles.ObjESPEnemyDispenser, Toggles.ObjESPTeamDispenser, "Dispenser")
         PBuilding(cachedTeleporters, Toggles.ObjESPEnemyTeleporter,Toggles.ObjESPTeamTeleporter,"Teleporter")
-        -- Pickups: no team distinction
         local function PPickup(cache, tog, name)
             if tog.Value then for _, o in pairs(cache) do if o.Parent then act[o]=true; UpdateObjectESP(o, name, Options.ObjESPBoxColor.Value) end end end
         end
@@ -3100,33 +3170,71 @@ local MainConnection = RunService.RenderStepped:Connect(function(dt)
         PPickup(cachedHP,   Toggles.ObjESPHP,   "HP")
         for i in pairs(ObjectESPCache) do if not act[i] or not i.Parent then HideObjectESP(i) end end
     else for i in pairs(ObjectESPCache) do HideObjectESP(i) end end
+end
 
-    UpdateWorldChams(); UpdateProjectileChams()
+function RH.UpdateTelestab(playerData)
+    if not (Toggles.TelestabToggle.Value and Options.TelestabKey:GetState()) then return end
+    local lc=GetLocalCharacter(); if not lc then return end
+    local lh=GetHRP(lc); if not lh then return end
+    local bestChar, bestDist2 = nil, 9e9
+    for _, pd in ipairs(playerData) do if pd.IsEnemy and pd.Distance < bestDist2 then bestDist2=pd.Distance; bestChar=pd.Character end end
+    if bestChar then
+        for _, v in pairs(bestChar:GetChildren()) do if v:IsA("BasePart") then v.CanCollide=false end end
+        local uh = GetHRP(bestChar); if uh then uh.CFrame = lh.CFrame + lh.CFrame.LookVector * 3.25 end
+    end
+end
+
+function RH.AgentNotify(playerData)
+    if not (Toggles.AgentNotification and Toggles.AgentNotification.Value and tick()-S.lastAgentNotif > 3) then return end
+    for _, pd in ipairs(playerData) do
+        if pd.IsEnemy and pd.Class=="Agent" and pd.Distance <= 30 then
+            Notify("Enemy Agent nearby! ("..pd.Player.Name..")", 3); S.lastAgentNotif=tick(); break
+        end
+    end
+end
+
+
+local MainConnection = RunService.RenderStepped:Connect(function(dt)
+    if Library.Unloaded then return end
+    Camera = Workspace.CurrentCamera
+    S.frames = S.frames + 1
+    visibilityCache = {}
+
+    FrameCache.camPos      = Camera.CFrame.Position
+    FrameCache.camCF       = Camera.CFrame
+    FrameCache.screenCenter = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    FrameCache.frameNum    = FrameCache.frameNum + 1
+
+    EnsureGUILoaded()
+    UpdateVelocityTracking()
+
+    if S.isCharging then
+        local w = GetLocalWeapon(); local cd = ChargeWeapons[w]
+        if cd then S.currentChargePercent = math.clamp((tick()-S.chargeStartTime)/cd.ChargeTime, 0, 1) end
+    end
+
+    FrameCache.playerData   = BuildPlayerData()
+    FrameCache.silentTarget, FrameCache.silentTargetPlr = GetSilentAimTarget(FrameCache.playerData)
+
+    local playerData = FrameCache.playerData
+
+    RunSilentAimLogic()
+    RunAutoWarp(playerData)
+    UpdateAimArms()
+    RH.UpdateDmgMod()
+    RH.UpdateFOVCircle()
+    RunPredictionIndicator()
+
+    RH.UpdatePlayerESP(playerData)
+    RH.UpdateObjectESP()
+
+    UpdateWorldChams(); UpdateProjectileChams(); UpdateAccChams()
 
     if Toggles.UsernameHider.Value then UpdateUsernameHider() end
 
-    if Toggles.AgentNotification and Toggles.AgentNotification.Value and tick()-S.lastAgentNotif > 3 then
-        for _, pd in ipairs(playerData) do
-            if pd.IsEnemy and pd.Class=="Agent" and pd.Distance <= 30 then
-                Notify("Enemy Agent nearby! ("..pd.Player.Name..")", 3); S.lastAgentNotif=tick(); break
-            end
-        end
-    end
-
+    RH.AgentNotify(playerData)
     RunAntiAim(dt)
-
-    -- Telestab
-    if Toggles.TelestabToggle.Value and Options.TelestabKey:GetState() then
-        local lc=GetLocalCharacter(); if lc then local lh=GetHRP(lc); if lh then
-            local bestChar, bestDist2 = nil, 9e9
-            for _, pd in ipairs(playerData) do if pd.IsEnemy and pd.Distance < bestDist2 then bestDist2=pd.Distance; bestChar=pd.Character end end
-            if bestChar then
-                for _, v in pairs(bestChar:GetChildren()) do if v:IsA("BasePart") then v.CanCollide=false end end
-                local uh = GetHRP(bestChar); if uh then uh.CFrame = lh.CFrame + lh.CFrame.LookVector * 3.25 end
-            end
-        end end
-    end
-
+    RH.UpdateTelestab(playerData)
     RunAutoBackstab(playerData)
     RunAutoMelee(playerData)
     RunAutoSticky(playerData)
@@ -3138,9 +3246,7 @@ local MainConnection = RunService.RenderStepped:Connect(function(dt)
     end
 end)
 
-------------------------------------------------------------
--- FPS COUNTER & WATERMARK
-------------------------------------------------------------
+
 task.spawn(function() while true do task.wait(1); if Library.Unloaded then break end; S.fps=S.frames; S.frames=0 end end)
 
 local _WatermarkLabel = nil
@@ -3161,9 +3267,7 @@ task.spawn(function() while true do task.wait(1); if Library.Unloaded then break
 end end)
 pcall(function() Library:SetWatermarkVisibility(true) end)
 
-------------------------------------------------------------
--- CLEANUP
-------------------------------------------------------------
+
 Players.PlayerRemoving:Connect(function(player)
     DestroyPlayerESP(player)
     RemovePlayerHighlight(player)
@@ -3172,10 +3276,8 @@ Players.PlayerRemoving:Connect(function(player)
     lastChamsProps[player]=nil
 end)
 
-------------------------------------------------------------
--- UI SETTINGS TAB
-------------------------------------------------------------
-do
+
+task.defer(function()
     local MenuGroup = Tabs["UI Settings"]:AddLeftGroupbox("Menu", "wrench")
     MenuGroup:AddToggle("KeybindMenuOpen", { Default=Library.KeybindFrame.Visible, Text="Open Keybind Menu",
         Callback=function(v) Library.KeybindFrame.Visible=v end })
@@ -3189,27 +3291,27 @@ do
     MenuGroup:AddLabel("Menu Bind"):AddKeyPicker("MenuKeybind", { Default="RightShift", NoUI=true, Text="Menu keybind" })
     MenuGroup:AddButton("Unload", function() Library:Unload() end)
     Library.ToggleKeybind = Options.MenuKeybind
-end
 
-ThemeManager:SetLibrary(Library)
-SaveManager:SetLibrary(Library)
-SaveManager:IgnoreThemeSettings()
-SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
-ThemeManager:SetFolder("Aegis")
-SaveManager:SetFolder("Aegis/TC2")
-SaveManager:BuildConfigSection(Tabs["UI Settings"])
-ThemeManager:ApplyToTab(Tabs["UI Settings"])
-SaveManager:LoadAutoloadConfig()
+    ThemeManager:SetLibrary(Library)
+    SaveManager:SetLibrary(Library)
+    SaveManager:IgnoreThemeSettings()
+    SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
+    ThemeManager:SetFolder("Aegis")
+    SaveManager:SetFolder("Aegis/TC2")
+    SaveManager:BuildConfigSection(Tabs["UI Settings"])
+    ThemeManager:ApplyToTab(Tabs["UI Settings"])
+    SaveManager:LoadAutoloadConfig()
+end)
 
-------------------------------------------------------------
--- UNLOAD
-------------------------------------------------------------
+
 Library:OnUnload(function()
     for p in pairs(ESPObjects)    do DestroyPlayerESP(p) end
     for i in pairs(ObjectESPCache) do DestroyObjectESP(i) end
     for p in pairs(PlayerChamsCache) do RemovePlayerHighlight(p) end
     for i in pairs(WorldChamsCache)  do pcall(function() WorldChamsCache[i]:Destroy() end) end
     for i in pairs(ProjectileChamsCache) do pcall(function() ProjectileChamsCache[i]:Destroy() end) end
+    for _, hl in pairs(AccChamsCache) do pcall(function() hl:Destroy() end) end
+    if _weaponOutlineHL then pcall(function() _weaponOutlineHL:Destroy() end) end
     FOVCircle:Remove(); pcall(function() PredictionIndicator:Remove() end)
     for _, ln in ipairs(PathLines) do pcall(function() ln:Remove() end) end
     DestroyMobileButton()
@@ -3219,11 +3321,25 @@ Library:OnUnload(function()
     end
     if S.speedConnection then S.speedConnection:Disconnect() end
     pcall(function() if Toggles.MaxRangeToggle and Toggles.MaxRangeToggle.Value then SetMaxRange(false) end end)
+    -- Restore fire rate
+    pcall(RestoreFireRate)
+    -- Disconnect inf cloak/shield
+    if _infCloakConn then pcall(function() _infCloakConn:Disconnect() end) end
+    if _infShieldConn then pcall(function() _infShieldConn:Disconnect() end) end
+    -- Disconnect profile ammo connections
+    for _, c in pairs(_profileInfUseConns) do pcall(function() c:Disconnect() end) end
+    for _, c in pairs(_profileInfResConns) do pcall(function() c:Disconnect() end) end
+    -- Restore dmg mod
+    if _dmgModInstalled and _dmgModFrameworks.Weapons and _dmgModOrig then
+        pcall(function() _dmgModFrameworks.Weapons.returndamagemod = _dmgModOrig end)
+    end
+    -- Remove wallbang hook
+    if wallbangHook then pcall(function() hookmetamethod(game, "__index", wallbangHook) end) end
     MainConnection:Disconnect()
-    if S.shooting then VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0); S.shooting=false end
+    S.shooting = false
     playerPositionHistory={}
     print("[Aegis] Unloaded!")
     Library.Unloaded = true
 end)
 
-print("[Aegis] loaded, account stolen.")
+print("[Aegis] huuf puuuf booooommm https://discord.gg/s9NEAtbd")
