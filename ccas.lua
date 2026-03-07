@@ -296,7 +296,7 @@ local SkeletonConnections = {
 
 local ProjectileWeapons = {
     ["Direct Hit"]       = {Speed=123.75, Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["Maverick"]         = {Speed=64.75,  Gravity=7.5,   InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Maverick"]         = {Speed=64.75,  Gravity=15,   InitialAngle=0,    Lifetime=99,  Type="Rocket"},
     ["Rocket Launcher"]  = {Speed=64.75,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
     ["Double Trouble"]   = {Speed=64.75,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
     ["Blackbox"]         = {Speed=68.75,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
@@ -1372,11 +1372,30 @@ local function GetProjectileAimCFrame(target, targetPlr, weapon)
     FrameCache.lastPredictedPos = predicted
     if weapon == "Huntsman" then predicted = predicted + Vector3.new(0, 1.5, 0) end
     local spd, grav = GetCurrentWeaponSpeed(weapon)
-    if grav and grav > 0 then
-        return CFrame.lookAt(FrameCache.camPos, CalculateAimPoint(FrameCache.camPos, predicted, spd, grav, weapon)), predicted
-    else
-        return CFrame.lookAt(FrameCache.camPos, predicted), predicted
-    end
+    local origin = FrameCache.camPos
+    -- Guard: if origin == predicted the direction is zero-length → NaN CFrame
+    if (origin - predicted).Magnitude < 0.5 then return nil end
+    local aimTarget = (grav and grav > 0) and CalculateAimPoint(origin, predicted, spd, grav, weapon) or predicted
+    if not aimTarget then return nil end
+    if (origin - aimTarget).Magnitude < 0.5 then return nil end
+    -- Final NaN guard on the constructed CFrame
+    local ok, cf = pcall(CFrame.lookAt, origin, aimTarget)
+    if not ok or cf ~= cf then return nil end  -- cf ~= cf is true if any component is NaN
+    -- Verify no NaN leaked into the CFrame components
+    local rx, ry, rz = cf:ToEulerAnglesXYZ()
+    if rx ~= rx or ry ~= ry or rz ~= rz then return nil end
+    return cf, predicted
+end
+
+-- Safe wrapper: returns nil instead of a NaN CFrame
+local function SafeLookAt(origin, target)
+    if not origin or not target then return nil end
+    if (origin - target).Magnitude < 0.5 then return nil end
+    local ok, cf = pcall(CFrame.lookAt, origin, target)
+    if not ok then return nil end
+    local rx, ry, rz = cf:ToEulerAnglesXYZ()
+    if rx ~= rx or ry ~= ry or rz ~= rz then return nil end
+    return cf
 end
 
 task.spawn(function()
@@ -1390,34 +1409,37 @@ task.spawn(function()
             if BlacklistedWeapons[weapon] then return orig(self2, ...) end
             local isProj = ProjectileWeapons[weapon] ~= nil or ChargeWeapons[weapon] ~= nil
 
-            if Config.SilentAim.Enabled and S.silentAimKeyActive then
+        if Config.SilentAim.Enabled and S.silentAimKeyActive then
                 local target    = FrameCache.silentTarget
                 local targetPlr = FrameCache.silentTargetPlr
                 if target then
                     if isProj then
                         if targetPlr then
-                            -- moving player: full prediction
                             local cf, aimPos = GetProjectileAimCFrame(target, targetPlr, weapon)
                             if cf and aimPos then
                                 if Toggles.SilentAimArms.Value then TriggerAimArms(aimPos) end
                                 return cf
                             end
                         else
-                            -- static target (sentry, sticky): gravity arc only, no movement prediction
                             local spd, grav = GetCurrentWeaponSpeed(weapon)
                             local aimPos = target.Position
                             local cf
                             if grav and grav > 0 then
-                                cf = CFrame.lookAt(FrameCache.camPos, CalculateAimPoint(FrameCache.camPos, aimPos, spd, grav, weapon))
+                                cf = SafeLookAt(FrameCache.camPos, CalculateAimPoint(FrameCache.camPos, aimPos, spd, grav, weapon))
                             else
-                                cf = CFrame.lookAt(FrameCache.camPos, aimPos)
+                                cf = SafeLookAt(FrameCache.camPos, aimPos)
                             end
-                            if Toggles.SilentAimArms.Value then TriggerAimArms(aimPos) end
-                            return cf
+                            if cf then
+                                if Toggles.SilentAimArms.Value then TriggerAimArms(aimPos) end
+                                return cf
+                            end
                         end
                     else
-                        if Toggles.SilentAimArms.Value then TriggerAimArms(target.Position) end
-                        return CFrame.lookAt(FrameCache.camPos, target.Position)
+                        local cf = SafeLookAt(FrameCache.camPos, target.Position)
+                        if cf then
+                            if Toggles.SilentAimArms.Value then TriggerAimArms(target.Position) end
+                            return cf
+                        end
                     end
                 end
             end
@@ -1433,8 +1455,11 @@ task.spawn(function()
                         if toT:Dot(pd.HRP.CFrame.LookVector) > 0.3 then
                             if not HasLineOfSight(lh.Position, pd.HRP.Position) then continue end
                             local backPos = pd.HRP.Position - pd.HRP.CFrame.LookVector
-                            if Toggles.SilentAimArms.Value then TriggerAimArms(backPos) end
-                            return CFrame.lookAt(FrameCache.camPos, backPos)
+                            local cf = SafeLookAt(FrameCache.camPos, backPos)
+                            if cf then
+                                if Toggles.SilentAimArms.Value then TriggerAimArms(backPos) end
+                                return cf
+                            end
                         end
                     end end
                 end
@@ -1453,7 +1478,10 @@ task.spawn(function()
                             if not HasLineOfSight(lh.Position, pd.HRP.Position) then continue end
                             if pd.Distance < bestDist2 then bestDist2 = pd.Distance; bestTarget = pd end
                         end
-                        if bestTarget then return CFrame.lookAt(FrameCache.camPos, bestTarget.HRP.Position) end
+                        if bestTarget then
+                            local cf = SafeLookAt(FrameCache.camPos, bestTarget.HRP.Position)
+                            if cf then return cf end
+                        end
                     end
                 end
             end
@@ -3048,7 +3076,11 @@ local function RunAutoBackstab(playerData)
             foundTarget = true
             if S.lastBackstabTarget ~= pd.Player then S.lastBackstabTarget=pd.Player; Notify("Backstab: "..pd.Player.Name, 2) end
             if tick()-S.lastShotTime >= 0.15 then
-                FireShot(); S.shooting=true; S.lastShotTime=tick()
+                pcall(function()
+                    local L = LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables
+                    L.Held1.Value = true; task.wait(0.05); L.Held1.Value = false
+                end)
+                S.shooting=true; S.lastShotTime=tick()
             end; break
         end
     end
