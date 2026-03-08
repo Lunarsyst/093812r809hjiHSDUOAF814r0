@@ -302,7 +302,7 @@ local ProjectileWeapons = {
     ["Blackbox"]         = {Speed=68.75,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
     ["Original"]         = {Speed=68.75,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
     ["Cow Mangler 5000"] = {Speed=64.75,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["Wreckers Yard"]    = {Speed=64.75,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Wrecker's Yard"]    = {Speed=64.75,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
     ["G-Bomb"]           = {Speed=44.6875,Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
     ["Airstrike"]        = {Speed=64.75,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket", AirSpeed=110},
     ["Liberty Launcher"] = {Speed=96.25,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
