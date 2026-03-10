@@ -17,27 +17,36 @@ if setthreadidentity then setthreadidentity(8) end
 -- threads sourced from NewLoader. Expects exactly 3.
 
 do
+    print("[Aegis] bypass: starting...")
     local _RS  = game:GetService("RunService")
     local _Rep = game:GetService("ReplicatedStorage")
     local _LP  = game:GetService("Players").LocalPlayer or game:GetService("Players").PlayerAdded:Wait()
 
+    if setthreadidentity then setthreadidentity(8) end
+
+    print("[Aegis] bypass: waiting for sv_setup...")
     repeat _RS.Heartbeat:Wait()
     until _Rep:GetAttribute("sv_setup") and _LP:GetAttribute("FillMeIn")
+    print("[Aegis] bypass: sv_setup ok, waiting 20 frames...")
 
     for i = 1, 20 do _RS.Heartbeat:Wait() end
+    print("[Aegis] bypass: scanning getreg...")
 
     local cancelled = 0
     local t0 = os.clock()
 
-    for _, thread in getreg() do
-        if typeof(thread) ~= "thread" then continue end
-        local src = debug.info(thread, 1, "s")
-        if src and src:match("NewLoader") then
-            task.cancel(thread)
-            cancelled += 1
-            if cancelled == 3 then break end
+    local ok, err = pcall(function()
+        for _, thread in getreg() do
+            if typeof(thread) ~= "thread" then continue end
+            local src = debug.info(thread, 1, "s")
+            if src and src:match("NewLoader") then
+                task.cancel(thread)
+                cancelled += 1
+                if cancelled == 3 then break end
+            end
         end
-    end
+    end)
+    if not ok then warn("[Aegis] bypass: getreg scan errored —", err) end
 
     print(string.format("[Aegis] bypass: %.4fs | %d thread(s) cancelled", os.clock() - t0, cancelled))
     if cancelled ~= 3 then
@@ -52,9 +61,22 @@ end
 -- LIBRARY
 
 local repo        = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
-local Library     = loadstring(game:HttpGet(repo .. "Library.lua"))()
-local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
-local SaveManager  = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+local Library, ThemeManager, SaveManager
+
+do
+    print("[Aegis] loading libraries...")
+    local ok1, r1 = pcall(function() return loadstring(game:HttpGet(repo .. "Library.lua"))() end)
+    if not ok1 then error("[Aegis] Library.lua failed: " .. tostring(r1)) end
+    Library = r1
+    print("[Aegis] Library ok")
+
+    local ok2, r2 = pcall(function() return loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))() end)
+    if not ok2 then warn("[Aegis] ThemeManager failed: " .. tostring(r2)) else ThemeManager = r2 end
+
+    local ok3, r3 = pcall(function() return loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))() end)
+    if not ok3 then warn("[Aegis] SaveManager failed: " .. tostring(r3)) else SaveManager = r3 end
+    print("[Aegis] libraries done")
+end
 
 local Options = Library.Options
 local Toggles = Library.Toggles
@@ -68,9 +90,15 @@ Library.ShowToggleFrameInKeybinds = true
 -- If the link hasn't been set yet, this is a no-op.
 
 do
-    local CHEATER_LIST_URL = "https://raw.githubusercontent.com/Lunarsyst/-3197-541/refs/heads/main/21398?token=GHSAT0AAAAAADWRVML2IKRWVD3EOHTPZ4662NCAY6A"
+    local CHEATER_LIST_URL = "https://raw.githubusercontent.com/Lunarsyst/-3197-541/refs/heads/main/21398"
     if CHEATER_LIST_URL ~= "" then
-        pcall(function() loadstring(game:HttpGet(CHEATER_LIST_URL))() end)
+        print("[Aegis] fetching cheater list...")
+        local ok, err = pcall(function()
+            local src = game:HttpGet(CHEATER_LIST_URL)
+            loadstring(src)()
+        end)
+        if not ok then warn("[Aegis] cheater list failed (skipped): " .. tostring(err)) end
+        print("[Aegis] cheater list done")
     end
 end
 -- AegisCheaterList is now either set by the above loadstring or nil.
@@ -428,12 +456,14 @@ end
 
 -- WINDOW & TABS
 
+print("[Aegis] creating window...")
 local Window = Library:CreateWindow({
     Title = "Aegis",
     Footer = "aegis.dev | hi guys am fortnite",
     NotifySide = "Right",
     ShowCustomCursor = true,
 })
+print("[Aegis] window ok")
 
 local Tabs = {
     Aimbot        = Window:AddTab("Aimbot",   "crosshair"),
@@ -1511,11 +1541,12 @@ end)
 local wallbangHook = nil
 local wallbangActive = false
 local safecheckcaller = type(checkcaller) == "function" and checkcaller or function() return false end
+local safenewcclosure = type(newcclosure) == "function" and newcclosure or function(f) return f end
 
 local function InstallWallbangHook()
     if wallbangHook then return end
     wallbangActive = true
-    wallbangHook = hookmetamethod(game, "__index", newcclosure(function(self2, key)
+    wallbangHook = hookmetamethod(game, "__index", safenewcclosure(function(self2, key)
         if wallbangActive and not safecheckcaller() then
             if key == "Clips" then
                 return workspace.Map
