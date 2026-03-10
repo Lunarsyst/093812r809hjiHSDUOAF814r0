@@ -302,7 +302,7 @@ local ProjectileWeapons = {
     ["Blackbox"]         = {Speed=68.75,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
     ["Original"]         = {Speed=68.75,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
     ["Cow Mangler 5000"] = {Speed=64.75,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
-    ["Wrecker's Yard"]    = {Speed=64.75,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
+    ["Wreckers Yard"]    = {Speed=64.75,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
     ["G-Bomb"]           = {Speed=44.6875,Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
     ["Airstrike"]        = {Speed=64.75,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket", AirSpeed=110},
     ["Liberty Launcher"] = {Speed=96.25,  Gravity=0,    InitialAngle=0,    Lifetime=99,  Type="Rocket"},
@@ -1510,12 +1510,13 @@ end)
 
 local wallbangHook = nil
 local wallbangActive = false
+local safecheckcaller = type(checkcaller) == "function" and checkcaller or function() return false end
 
 local function InstallWallbangHook()
     if wallbangHook then return end
     wallbangActive = true
     wallbangHook = hookmetamethod(game, "__index", newcclosure(function(self2, key)
-        if wallbangActive and not checkcaller() then
+        if wallbangActive and not safecheckcaller() then
             if key == "Clips" then
                 return workspace.Map
             end
@@ -1694,10 +1695,11 @@ local SV = {
 local function CreatePlayerESP(player)
     if ESPObjects[player] then return end
     local d = {BoxLines={}, BoxOutlines={}, CornerLines={}, CornerOutlines={},
-               Box3DLines={}, Box3DOutlines={}, SkeletonLines={}, StatusTexts={}, Hidden=true}
+               Box3DLines={}, Box3DOutlines={}, SkeletonLines={}, StatusTexts={}, HealthSegs={}, Hidden=true}
     for i=1,4  do d.BoxOutlines[i]   = MkDraw("Line",{Thickness=1,Color=Color3.new(0,0,0),Visible=false}) end
     for i=1,8  do d.CornerOutlines[i]= MkDraw("Line",{Thickness=1,Color=Color3.new(0,0,0),Visible=false}) end
     for i=1,12 do d.Box3DOutlines[i] = MkDraw("Line",{Thickness=1,Color=Color3.new(0,0,0),Visible=false}) end
+    d.BoxFill          = MkDraw("Square",{Filled=true,Transparency=1,Visible=false})
     d.HealthBarBG      = MkDraw("Line",{Thickness=3,Color=Color3.fromRGB(20,20,20),Visible=false})
     d.HealthBarOutline = MkDraw("Square",{Filled=false,Thickness=1,Color=Color3.new(0,0,0),Visible=false})
     d.TracerOut        = MkDraw("Line",{Thickness=3,Color=Color3.new(0,0,0),Visible=false})
@@ -1705,7 +1707,7 @@ local function CreatePlayerESP(player)
     for i=1,8  do d.CornerLines[i] = MkDraw("Line",{Thickness=1,Visible=false}) end
     for i=1,12 do d.Box3DLines[i]  = MkDraw("Line",{Thickness=1,Visible=false}) end
     d.HealthBar         = MkDraw("Line",{Thickness=1,Visible=false})
-    d.HealthDmg         = MkDraw("Line",{Thickness=1,Color=Color3.fromRGB(255,120,0),Visible=false})
+    for i=1,8 do d.HealthSegs[i] = MkDraw("Line",{Thickness=1,Visible=false}) end
     d.Tracer            = MkDraw("Line",{Thickness=1,Visible=false})
     d.NameText          = MkDraw("Text",{Size=13,Center=true,Outline=true,Font=2,Visible=false})
     d.CheaterText       = MkDraw("Text",{Size=11,Center=true,Outline=true,Font=2,Visible=false,Color=Color3.fromRGB(255,60,60)})
@@ -1729,7 +1731,8 @@ local function DestroyPlayerESP(player)
     for i=1,8  do R(d.CornerLines[i]); R(d.CornerOutlines[i]) end
     for i=1,12 do R(d.Box3DLines[i]);  R(d.Box3DOutlines[i]) end
     for i=1,#SkeletonConnections do R(d.SkeletonLines[i]) end
-    R(d.HealthBarBG); R(d.HealthBar); R(d.HealthDmg); R(d.HealthBarOutline)
+    for i=1,8 do R(d.HealthSegs[i]) end
+    R(d.BoxFill); R(d.HealthBarBG); R(d.HealthBar); R(d.HealthBarOutline)
     R(d.NameText); R(d.CheaterText); R(d.DistanceText); R(d.WeaponText); R(d.ClassText); R(d.AegisText)
     R(d.HealthText); R(d.HealthPercentText); R(d.Tracer); R(d.TracerOut)
     for _, txt in pairs(d.StatusTexts) do R(txt) end
@@ -1742,7 +1745,8 @@ local function HidePlayerESP(player)
     for i=1,8  do d.CornerLines[i].Visible=false;  d.CornerOutlines[i].Visible=false end
     for i=1,12 do d.Box3DLines[i].Visible=false;   d.Box3DOutlines[i].Visible=false end
     for i=1,#SkeletonConnections do d.SkeletonLines[i].Visible=false end
-    d.HealthBarBG.Visible=false; d.HealthBar.Visible=false; d.HealthDmg.Visible=false; d.HealthBarOutline.Visible=false
+    for i=1,8 do d.HealthSegs[i].Visible=false end
+    d.BoxFill.Visible=false; d.HealthBarBG.Visible=false; d.HealthBar.Visible=false; d.HealthBarOutline.Visible=false
     d.NameText.Visible=false; d.CheaterText.Visible=false; d.DistanceText.Visible=false
     d.WeaponText.Visible=false; d.ClassText.Visible=false; d.AegisText.Visible=false
     d.HealthText.Visible=false; d.HealthPercentText.Visible=false
@@ -1790,29 +1794,32 @@ local function Get2DBox(pd)
     return {X=sp.X-w/2, Y=sp.Y-h/2, W=w, H=h, CX=sp.X, CY=sp.Y, TopY=sp.Y-h/2, BotY=sp.Y+h/2}
 end
 
-local function Draw2DBox(d, b, c)
+local function Draw2DBox(d, b, c, th)
+    th = th or 1
     local tl=Vector2.new(b.X,b.Y); local tr=Vector2.new(b.X+b.W,b.Y)
     local bl=Vector2.new(b.X,b.Y+b.H); local br=Vector2.new(b.X+b.W,b.Y+b.H)
     local edges = {{tl,tr},{tr,br},{br,bl},{bl,tl}}
     for i=1,4 do
-        d.BoxOutlines[i].From=edges[i][1]; d.BoxOutlines[i].To=edges[i][2]; d.BoxOutlines[i].Color=Color3.new(0,0,0); d.BoxOutlines[i].Visible=true
-        d.BoxLines[i].From=edges[i][1];    d.BoxLines[i].To=edges[i][2];    d.BoxLines[i].Color=c;                     d.BoxLines[i].Visible=true
+        d.BoxOutlines[i].From=edges[i][1]; d.BoxOutlines[i].To=edges[i][2]; d.BoxOutlines[i].Thickness=th+1; d.BoxOutlines[i].Color=Color3.new(0,0,0); d.BoxOutlines[i].Visible=true
+        d.BoxLines[i].From=edges[i][1];    d.BoxLines[i].To=edges[i][2];    d.BoxLines[i].Thickness=th;       d.BoxLines[i].Color=c;                     d.BoxLines[i].Visible=true
     end
 end
 
-local function DrawCorners(d, b, c)
+local function DrawCorners(d, b, c, th)
+    th = th or 1
     local cl = math.max(b.H*0.25, 6)
     local tl=Vector2.new(b.X,b.Y); local tr=Vector2.new(b.X+b.W,b.Y)
     local bl=Vector2.new(b.X,b.Y+b.H); local br=Vector2.new(b.X+b.W,b.Y+b.H)
     local cn = {{tl,tl+Vector2.new(cl,0)},{tl,tl+Vector2.new(0,cl)},{tr,tr+Vector2.new(-cl,0)},{tr,tr+Vector2.new(0,cl)},
                 {bl,bl+Vector2.new(cl,0)},{bl,bl+Vector2.new(0,-cl)},{br,br+Vector2.new(-cl,0)},{br,br+Vector2.new(0,-cl)}}
     for i=1,8 do
-        d.CornerOutlines[i].From=cn[i][1]; d.CornerOutlines[i].To=cn[i][2]; d.CornerOutlines[i].Color=Color3.new(0,0,0); d.CornerOutlines[i].Visible=true
-        d.CornerLines[i].From=cn[i][1];    d.CornerLines[i].To=cn[i][2];    d.CornerLines[i].Color=c;                     d.CornerLines[i].Visible=true
+        d.CornerOutlines[i].From=cn[i][1]; d.CornerOutlines[i].To=cn[i][2]; d.CornerOutlines[i].Thickness=th+1; d.CornerOutlines[i].Color=Color3.new(0,0,0); d.CornerOutlines[i].Visible=true
+        d.CornerLines[i].From=cn[i][1];    d.CornerLines[i].To=cn[i][2];    d.CornerLines[i].Thickness=th;       d.CornerLines[i].Color=c;                     d.CornerLines[i].Visible=true
     end
 end
 
-local function Draw3DBox(d, char, c)
+local function Draw3DBox(d, char, c, th)
+    th = th or 1
     local hrp = GetHRP(char); if not hrp then return end
     local cf = hrp.CFrame; local sz = Vector3.new(2,3,2)
     local corners = {
@@ -1824,8 +1831,8 @@ local function Draw3DBox(d, char, c)
     local sc2 = {}; for _, v in pairs(corners) do table.insert(sc2, (WorldToViewportPoint(v))) end
     local edges = {{1,2},{2,3},{3,4},{4,1},{5,6},{6,7},{7,8},{8,5},{1,5},{2,6},{3,7},{4,8}}
     for i, e in pairs(edges) do
-        d.Box3DOutlines[i].From=sc2[e[1]]; d.Box3DOutlines[i].To=sc2[e[2]]; d.Box3DOutlines[i].Color=Color3.new(0,0,0); d.Box3DOutlines[i].Visible=true
-        d.Box3DLines[i].From=sc2[e[1]];    d.Box3DLines[i].To=sc2[e[2]];    d.Box3DLines[i].Color=c;                     d.Box3DLines[i].Visible=true
+        d.Box3DOutlines[i].From=sc2[e[1]]; d.Box3DOutlines[i].To=sc2[e[2]]; d.Box3DOutlines[i].Thickness=th+1; d.Box3DOutlines[i].Color=Color3.new(0,0,0); d.Box3DOutlines[i].Visible=true
+        d.Box3DLines[i].From=sc2[e[1]];    d.Box3DLines[i].To=sc2[e[2]];    d.Box3DLines[i].Thickness=th;       d.Box3DLines[i].Color=c;                     d.Box3DLines[i].Visible=true
     end
 end
 
@@ -1843,82 +1850,162 @@ local function UpdatePlayerESP(pd)
     local box = Get2DBox(pd); if not box then HidePlayerESP(player); return end
     HidePlayerESP(player); d.Hidden = false
 
-    local color = Options.ESPBoxColor.Value
-    local bt = Options.ESPBoxType.Value
-    if     bt == "2D"      then Draw2DBox(d, box, color)
-    elseif bt == "Corners" then DrawCorners(d, box, color)
-    elseif bt == "3D"      then Draw3DBox(d, char, color) end
+    local color  = Options.ESPBoxColor.Value
+    local boxTrans = Options.ESPBoxColor and Options.ESPBoxColor.Transparency or 0
+    local bt     = Options.ESPBoxType.Value
+    local th     = Options.ESPBoxThickness and math.max(1, math.floor(Options.ESPBoxThickness.Value)) or 1
+
+    -- Box fill (drawn first so lines appear on top)
+    if Toggles.ESPBoxFill and Toggles.ESPBoxFill.Value then
+        local fc = Options.ESPBoxFillColor and Options.ESPBoxFillColor.Value or Color3.new(1,0,0)
+        local ft = Options.ESPBoxFillColor and Options.ESPBoxFillColor.Transparency or 0.7
+        d.BoxFill.Position   = Vector2.new(box.X, box.Y)
+        d.BoxFill.Size       = Vector2.new(box.W, box.H)
+        d.BoxFill.Color      = fc
+        d.BoxFill.Transparency = ft
+        d.BoxFill.Visible    = true
+    else
+        d.BoxFill.Visible = false
+    end
+
+    -- Box outline / corners
+    if     bt == "2D"      then Draw2DBox(d, box, color, th)
+    elseif bt == "Corners" then DrawCorners(d, box, color, th)
+    elseif bt == "3D"      then Draw3DBox(d, char, color, th) end
+
+    -- Apply outline transparency to box lines
+    if bt == "2D" or bt == "3D" then
+        local lineTable = bt == "2D" and d.BoxLines or d.Box3DLines
+        local n = bt == "2D" and 4 or 12
+        for i=1,n do pcall(function() lineTable[i].Transparency = boxTrans end) end
+    elseif bt == "Corners" then
+        for i=1,8 do pcall(function() d.CornerLines[i].Transparency = boxTrans end) end
+    end
 
     local maxHP = GetPlayerMaxHP(player)
     local hp = hum.Health; local hf = math.clamp(hp/maxHP, 0, 1)
     local topY = box.TopY - 2; local tX = box.CX
 
-    -- Cheater tag
+    -- Tags above box
     if pd.IsCheater then
         topY = topY - 13
-        d.CheaterText.Text = "cheater"; d.CheaterText.Position = Vector2.new(tX, topY)
-        d.CheaterText.Color = Color3.fromRGB(255,60,60); d.CheaterText.Visible = true
-        topY = topY - 2
-    else d.CheaterText.Visible = false end
-
-    -- Aegis user tag
+        d.CheaterText.Text="cheater"; d.CheaterText.Position=Vector2.new(tX,topY)
+        d.CheaterText.Color=Color3.fromRGB(255,60,60); d.CheaterText.Visible=true; topY=topY-2
+    else d.CheaterText.Visible=false end
     if AegisUserCache[player] then
         topY = topY - 13
-        d.AegisText.Text = "[A]"; d.AegisText.Position = Vector2.new(tX, topY)
-        d.AegisText.Color = Color3.fromRGB(180,10,10); d.AegisText.Visible = true
-        topY = topY - 2
-    else d.AegisText.Visible = false end
-
+        d.AegisText.Text="[A]"; d.AegisText.Position=Vector2.new(tX,topY)
+        d.AegisText.Color=Color3.fromRGB(180,10,10); d.AegisText.Visible=true; topY=topY-2
+    else d.AegisText.Visible=false end
     if Toggles.ESPClass and Toggles.ESPClass.Value then
-        topY = topY - 15; d.ClassText.Text = pd.Class; d.ClassText.Position = Vector2.new(tX,topY); d.ClassText.Color = Color3.fromRGB(200,200,255); d.ClassText.Visible = true
-    end
+        topY=topY-15; d.ClassText.Text=pd.Class; d.ClassText.Position=Vector2.new(tX,topY); d.ClassText.Color=Color3.fromRGB(200,200,255); d.ClassText.Visible=true
+    else d.ClassText.Visible=false end
     if Toggles.ESPWeapon and Toggles.ESPWeapon.Value then
-        topY = topY - 15; d.WeaponText.Text = GetPlayerWeapon(char); d.WeaponText.Position = Vector2.new(tX,topY); d.WeaponText.Color = Color3.fromRGB(255,200,100); d.WeaponText.Visible = true
-    end
+        topY=topY-15; d.WeaponText.Text=GetPlayerWeapon(char); d.WeaponText.Position=Vector2.new(tX,topY); d.WeaponText.Color=Color3.fromRGB(255,200,100); d.WeaponText.Visible=true
+    else d.WeaponText.Visible=false end
+
+    -- Below-box labels
     local bY = box.BotY + 2
     if Toggles.ESPDistance and Toggles.ESPDistance.Value then
-        d.DistanceText.Text = string.format("[%dm]", math.floor(pd.Distance)); d.DistanceText.Position = Vector2.new(tX,bY); d.DistanceText.Color = Color3.new(1,1,1); d.DistanceText.Visible = true; bY = bY + 15
-    end
+        d.DistanceText.Text=string.format("[%dm]",math.floor(pd.Distance)); d.DistanceText.Position=Vector2.new(tX,bY); d.DistanceText.Color=Color3.new(1,1,1); d.DistanceText.Visible=true; bY=bY+15
+    else d.DistanceText.Visible=false end
+
+    -- Status letters (right side)
     if Toggles.ESPStatus and Toggles.ESPStatus.Value then
-        local mods = GetPlayerModifiers(player); local rightX = box.X+box.W+4; local rightY = box.Y
-        for attrName, info in pairs(StatusLetters) do
-            local txt = d.StatusTexts[attrName]
-            if mods[attrName] then txt.Text=info.Letter; txt.Position=Vector2.new(rightX,rightY); txt.Color=(attrName=="Ubercharged") and GetRainbowColor() or info.Color; txt.Visible=true; rightY=rightY+12
+        local mods=GetPlayerModifiers(player); local rX=box.X+box.W+4; local rY=box.Y
+        for attrName,info in pairs(StatusLetters) do
+            local txt=d.StatusTexts[attrName]
+            if mods[attrName] then txt.Text=info.Letter; txt.Position=Vector2.new(rX,rY); txt.Color=(attrName=="Ubercharged") and GetRainbowColor() or info.Color; txt.Visible=true; rY=rY+12
             else txt.Visible=false end
         end
-    else for _, txt in pairs(d.StatusTexts) do txt.Visible=false end end
+    else for _,txt in pairs(d.StatusTexts) do txt.Visible=false end end
 
+    -- Health bar
     if Toggles.ESPHealthBar and Toggles.ESPHealthBar.Value then
-        local hpFrac = math.clamp(hp/maxHP, 0, 1.5)
-        local barW=3; local barX=box.X-barW-3; local barTop=box.Y; local barBot=box.Y+box.H; local barH=barBot-barTop
-        local hpHeight=barH*math.min(hpFrac,1); local fillY=barBot-hpHeight
+        local barW   = Options.ESPHPBarWidth and math.max(1, math.floor(Options.ESPHPBarWidth.Value)) or 2
+        local side   = Options.ESPHPBarSide and Options.ESPHPBarSide.Value or "Left"
+        local barTop = box.Y; local barBot = box.Y + box.H; local barH = barBot - barTop
+        local fillY  = barBot - barH * hf
+
+        local barX
+        if side == "Left"  then barX = box.X - barW - 3
+        else                    barX = box.X + box.W + 3 end
+
+        -- Background
+        local bgColor = Options.ESPHPBGColor and Options.ESPHPBGColor.Value or Color3.fromRGB(20,20,20)
+        local bgTrans = Options.ESPHPBGColor and Options.ESPHPBGColor.Transparency or 0
+        d.HealthBarBG.From=Vector2.new(barX+barW/2,barTop); d.HealthBarBG.To=Vector2.new(barX+barW/2,barBot)
+        d.HealthBarBG.Thickness=barW; d.HealthBarBG.Color=bgColor
+        pcall(function() d.HealthBarBG.Transparency=bgTrans end)
+        d.HealthBarBG.Visible=true
+
+        -- Outline
         d.HealthBarOutline.Size=Vector2.new(barW+2,barH+2); d.HealthBarOutline.Position=Vector2.new(barX-1,barTop-1); d.HealthBarOutline.Visible=true
-        d.HealthBarBG.From=Vector2.new(barX+1,barTop); d.HealthBarBG.To=Vector2.new(barX+1,barBot); d.HealthBarBG.Thickness=barW; d.HealthBarBG.Visible=true
-        d.HealthBar.From=Vector2.new(barX+1,fillY); d.HealthBar.To=Vector2.new(barX+1,barBot); d.HealthBar.Thickness=barW-2
-        d.HealthBar.Color = hpFrac>1 and Color3.fromRGB(0,200,255) or Color3.fromRGB(255*(1-hf),255*hf,0)
-        d.HealthBar.Visible=true; d.HealthDmg.Visible=false
+
+        local cHigh = Options.ESPHPColorHigh and Options.ESPHPColorHigh.Value or Color3.fromRGB(0,220,80)
+        local cLow  = Options.ESPHPColorLow  and Options.ESPHPColorLow.Value  or Color3.fromRGB(220,40,40)
+
+        local function lerpC(a, b2, t)
+            return Color3.new(a.R+(b2.R-a.R)*t, a.G+(b2.G-a.G)*t, a.B+(b2.B-a.B)*t)
+        end
+
+        if Toggles.ESPHPGradient and Toggles.ESPHPGradient.Value then
+            -- Gradient: 8 segments, bottom = cHigh, top = cLow
+            d.HealthBar.Visible = false
+            local N = 8; local segH = barH / N
+            for i = 1, N do
+                local seg = d.HealthSegs[i]
+                local sTop = barTop + (i-1)*segH
+                local sBot = barTop + i*segH
+                local t = 1 - (i-0.5)/N  -- 0 at bottom (high), 1 at top (low)
+                local c = lerpC(cHigh, cLow, t)
+                if sBot <= fillY then
+                    seg.Visible = false
+                elseif sTop >= fillY then
+                    seg.From=Vector2.new(barX+barW/2,sTop); seg.To=Vector2.new(barX+barW/2,sBot)
+                    seg.Thickness=barW; seg.Color=c; seg.Visible=true
+                else
+                    seg.From=Vector2.new(barX+barW/2,fillY); seg.To=Vector2.new(barX+barW/2,sBot)
+                    seg.Thickness=barW; seg.Color=c; seg.Visible=true
+                end
+            end
+        else
+            -- Solid bar, color lerped by HP fraction
+            for i=1,8 do d.HealthSegs[i].Visible=false end
+            local barColor = hp > maxHP and Color3.fromRGB(0,200,255) or lerpC(cLow, cHigh, hf)
+            d.HealthBar.From=Vector2.new(barX+barW/2,fillY); d.HealthBar.To=Vector2.new(barX+barW/2,barBot)
+            d.HealthBar.Thickness=barW; d.HealthBar.Color=barColor; d.HealthBar.Visible=true
+        end
+
+        -- HP text
         if Toggles.ESPHealthValue and Toggles.ESPHealthValue.Value then
-            local txt = tostring(math.floor(hp)); if hpFrac>1 then txt=txt.." (+"..math.floor(hp-maxHP)..")" end
-            d.HealthText.Text=txt; d.HealthText.Position=Vector2.new(barX-2,fillY-6); d.HealthText.Color=d.HealthBar.Color; d.HealthText.Visible=true
+            local txt = tostring(math.floor(hp)); if hp > maxHP then txt=txt.." (+"..math.floor(hp-maxHP)..")" end
+            d.HealthText.Text=txt; d.HealthText.Position=Vector2.new(barX-2,fillY-7)
+            d.HealthText.Color=Color3.new(1,1,1); d.HealthText.Center=false; d.HealthText.Visible=true
         else d.HealthText.Visible=false end
         if Toggles.ESPHealthPercent and Toggles.ESPHealthPercent.Value then
-            d.HealthPercentText.Text=string.format("%d%%",math.floor(hf*100)); d.HealthPercentText.Position=Vector2.new(barX-2,barBot-12); d.HealthPercentText.Color=Color3.new(1,1,1); d.HealthPercentText.Visible=true
+            d.HealthPercentText.Text=string.format("%d%%",math.floor(hf*100))
+            d.HealthPercentText.Position=Vector2.new(barX-2,barBot-7)
+            d.HealthPercentText.Color=Color3.new(1,1,1); d.HealthPercentText.Center=false; d.HealthPercentText.Visible=true
         else d.HealthPercentText.Visible=false end
     else
-        d.HealthBarBG.Visible=false; d.HealthBar.Visible=false; d.HealthDmg.Visible=false; d.HealthBarOutline.Visible=false
+        d.HealthBarBG.Visible=false; d.HealthBar.Visible=false; d.HealthBarOutline.Visible=false
+        for i=1,8 do d.HealthSegs[i].Visible=false end
         if Toggles.ESPHealthValue and Toggles.ESPHealthValue.Value then
-            d.HealthText.Text=string.format("HP: %d/%d",math.floor(hp),math.floor(maxHP)); d.HealthText.Position=Vector2.new(tX,bY); d.HealthText.Color=Color3.new(1,1,1); d.HealthText.Visible=true; d.HealthText.Center=true; bY=bY+15
+            d.HealthText.Text=string.format("HP: %d/%d",math.floor(hp),math.floor(maxHP))
+            d.HealthText.Position=Vector2.new(tX,bY); d.HealthText.Color=Color3.new(1,1,1); d.HealthText.Center=true; d.HealthText.Visible=true; bY=bY+15
         else d.HealthText.Visible=false end
         if Toggles.ESPHealthPercent and Toggles.ESPHealthPercent.Value then
-            d.HealthPercentText.Text=string.format("%d%%",math.floor(hf*100)); d.HealthPercentText.Position=Vector2.new(tX,bY); d.HealthPercentText.Color=Color3.new(1,1,1); d.HealthPercentText.Visible=true; d.HealthPercentText.Center=true
+            d.HealthPercentText.Text=string.format("%d%%",math.floor(hf*100))
+            d.HealthPercentText.Position=Vector2.new(tX,bY); d.HealthPercentText.Color=Color3.new(1,1,1); d.HealthPercentText.Center=true; d.HealthPercentText.Visible=true
         else d.HealthPercentText.Visible=false end
     end
 
     if Toggles.ESPSkeleton and Toggles.ESPSkeleton.Value then
         for i, conn in pairs(SkeletonConnections) do
-            local pA = char:FindFirstChild(conn[1]); local pB = char:FindFirstChild(conn[2])
+            local pA=char:FindFirstChild(conn[1]); local pB=char:FindFirstChild(conn[2])
             if pA and pB then
-                local sA, oA = WorldToViewportPoint(pA.Position); local sB, oB = WorldToViewportPoint(pB.Position)
+                local sA,oA=WorldToViewportPoint(pA.Position); local sB,oB=WorldToViewportPoint(pB.Position)
                 if oA and oB then d.SkeletonLines[i].From=sA; d.SkeletonLines[i].To=sB; d.SkeletonLines[i].Color=Color3.new(1,1,1); d.SkeletonLines[i].Visible=true
                 else d.SkeletonLines[i].Visible=false end
             else d.SkeletonLines[i].Visible=false end
@@ -1926,15 +2013,15 @@ local function UpdatePlayerESP(pd)
     end
 
     if Toggles.ESPTracer and Toggles.ESPTracer.Value then
-        local tracerColor = Options.ESPTracerColor and Options.ESPTracerColor.Value or color
-        local originMode  = Options.ESPTracerOrigin and Options.ESPTracerOrigin.Value or "Bottom"
+        local tracerColor=Options.ESPTracerColor and Options.ESPTracerColor.Value or color
+        local originMode=Options.ESPTracerOrigin and Options.ESPTracerOrigin.Value or "Bottom"
         local tracerOrigin
-        if     originMode == "Top"    then tracerOrigin = Vector2.new(Camera.ViewportSize.X/2, 0)
-        elseif originMode == "Center" then tracerOrigin = FrameCache.screenCenter
-        else tracerOrigin = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y) end
+        if     originMode=="Top"    then tracerOrigin=Vector2.new(Camera.ViewportSize.X/2, 0)
+        elseif originMode=="Center" then tracerOrigin=FrameCache.screenCenter
+        else tracerOrigin=Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y) end
         d.TracerOut.From=tracerOrigin; d.TracerOut.To=Vector2.new(box.CX,box.BotY); d.TracerOut.Visible=true
         d.Tracer.From=tracerOrigin;    d.Tracer.To=Vector2.new(box.CX,box.BotY); d.Tracer.Color=tracerColor; d.Tracer.Visible=true
-    end
+    else d.Tracer.Visible=false; d.TracerOut.Visible=false end
 end
 
 local function GetObjectBox(inst)
@@ -2039,14 +2126,14 @@ local function UpdatePlayerChams(pd)
     if pd.IsFriend     and not Toggles.ChamsShowFriend.Value then RemovePlayerHighlight(pd.Player); return end
     local fc, oc, ft, ot
     if pd.IsFriend then
-        fc=Options.ChamsFriendColor.Value; oc=Options.ChamsFriendOutline.Value; ft=Options.ChamsFriendTrans.Value; ot=Options.ChamsFriendOutlineTrans.Value
+        fc=Options.ChamsFriendColor.Value; oc=Options.ChamsFriendOutline.Value; ft=Options.ChamsFriendColor.Transparency; ot=Options.ChamsFriendOutline.Transparency
     elseif pd.IsEnemy then
-        fc=Options.ChamsEnemyColor.Value; oc=Options.ChamsEnemyOutline.Value; ft=Options.ChamsEnemyTrans.Value; ot=Options.ChamsEnemyOutlineTrans.Value
+        fc=Options.ChamsEnemyColor.Value; oc=Options.ChamsEnemyOutline.Value; ft=Options.ChamsEnemyColor.Transparency; ot=Options.ChamsEnemyOutline.Transparency
     else
-        fc=Options.ChamsTeamColor.Value; oc=Options.ChamsTeamOutline.Value; ft=Options.ChamsTeamTrans.Value; ot=Options.ChamsTeamOutlineTrans.Value
+        fc=Options.ChamsTeamColor.Value; oc=Options.ChamsTeamOutline.Value; ft=Options.ChamsTeamColor.Transparency; ot=Options.ChamsTeamOutline.Transparency
     end
     if Toggles.VisibleChamsEnabled.Value and IsCharacterVisible(pd.Character) then
-        fc=Options.VisibleChamsColor.Value; oc=Options.VisibleChamsOutline.Value; ft=Options.VisibleChamsTrans.Value; ot=Options.VisibleOutlineTrans.Value
+        fc=Options.VisibleChamsColor.Value; oc=Options.VisibleChamsOutline.Value; ft=Options.VisibleChamsColor.Transparency; ot=Options.VisibleChamsOutline.Transparency
     end
     if Toggles.ChamsVisibleOnly.Value then
         if not IsCharacterVisible(pd.Character) then RemovePlayerHighlight(pd.Player); return end
@@ -2064,7 +2151,7 @@ local function UpdateWorldChams()
     if tick()-S.lastWorldChamsUpdate < 0.5 then return end; S.lastWorldChamsUpdate = tick()
 
     -- Generic apply (pickups/HP/ammo — no team distinction)
-    local function A(objs, co, oo, to, oto)
+    local function A(objs, co, oo)
         for _, obj in pairs(objs) do
             if not obj.Parent then continue end
             if not WorldChamsCache[obj] then
@@ -2074,19 +2161,18 @@ local function UpdateWorldChams()
                 if ok and h then WorldChamsCache[obj] = h end
             end
             local hl = WorldChamsCache[obj]; if not hl then continue end
-            hl.FillColor=co.Value; hl.OutlineColor=oo.Value; hl.FillTransparency=to.Value; hl.OutlineTransparency=oto.Value
+            hl.FillColor=co.Value; hl.OutlineColor=oo.Value; hl.FillTransparency=co.Transparency; hl.OutlineTransparency=oo.Transparency
             hl.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop; hl.Enabled=true
         end
     end
 
     -- Team-aware apply (buildings)
-    local function AB(objs, showEnemy, showTeam, eFill, eOut, eTrans, eOTrans, tFill, tOut, tTrans, tOTrans)
+    local function AB(objs, showEnemy, showTeam, eFill, eOut, tFill, tOut)
         for _, obj in pairs(objs) do
             if not obj.Parent then continue end
             local side = GetBuildingTeam(obj)
             local visible = (side == "enemy" and showEnemy.Value) or (side == "team" and showTeam.Value)
             if not visible then
-                -- Hide if exists
                 local hl = WorldChamsCache[obj]
                 if hl then hl.Enabled = false end
                 continue
@@ -2099,29 +2185,29 @@ local function UpdateWorldChams()
             end
             local hl = WorldChamsCache[obj]; if not hl then continue end
             local isEnemy = (side == "enemy")
-            hl.FillColor         = isEnemy and eFill.Value   or tFill.Value
-            hl.OutlineColor      = isEnemy and eOut.Value    or tOut.Value
-            hl.FillTransparency  = isEnemy and eTrans.Value  or tTrans.Value
-            hl.OutlineTransparency = isEnemy and eOTrans.Value or tOTrans.Value
+            hl.FillColor           = isEnemy and eFill.Value or tFill.Value
+            hl.OutlineColor        = isEnemy and eOut.Value  or tOut.Value
+            hl.FillTransparency    = isEnemy and eFill.Transparency or tFill.Transparency
+            hl.OutlineTransparency = isEnemy and eOut.Transparency  or tOut.Transparency
             hl.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop; hl.Enabled=true
         end
     end
 
-    A(cachedHP,   Options.HealthChamsColor,  Options.HealthChamsOutline,  Options.HealthChamsTrans,  Options.HealthChamsOutlineTrans)
-    A(cachedAmmo, Options.AmmoChamsColor,    Options.AmmoChamsOutline,    Options.AmmoChamsTrans,    Options.AmmoChamsOutlineTrans)
+    A(cachedHP,   Options.HealthChamsColor,  Options.HealthChamsOutline)
+    A(cachedAmmo, Options.AmmoChamsColor,    Options.AmmoChamsOutline)
 
     AB(cachedSentries,
         Toggles.SentryChamsEnemy,    Toggles.SentryChamsTeam,
-        Options.SentryChamsEnemyColor,  Options.SentryChamsEnemyOutline,  Options.SentryChamsEnemyTrans,  Options.SentryChamsEnemyOutlineTrans,
-        Options.SentryChamsTeamColor,   Options.SentryChamsTeamOutline,   Options.SentryChamsTeamTrans,   Options.SentryChamsTeamOutlineTrans)
+        Options.SentryChamsEnemyColor,  Options.SentryChamsEnemyOutline,
+        Options.SentryChamsTeamColor,   Options.SentryChamsTeamOutline)
     AB(cachedDispensers,
         Toggles.DispenserChamsEnemy, Toggles.DispenserChamsTeam,
-        Options.DispenserChamsEnemyColor, Options.DispenserChamsEnemyOutline, Options.DispenserChamsEnemyTrans, Options.DispenserChamsEnemyOutlineTrans,
-        Options.DispenserChamsTeamColor,  Options.DispenserChamsTeamOutline,  Options.DispenserChamsTeamTrans,  Options.DispenserChamsTeamOutlineTrans)
+        Options.DispenserChamsEnemyColor, Options.DispenserChamsEnemyOutline,
+        Options.DispenserChamsTeamColor,  Options.DispenserChamsTeamOutline)
     AB(cachedTeleporters,
         Toggles.TeleporterChamsEnemy, Toggles.TeleporterChamsTeam,
-        Options.TeleporterChamsEnemyColor, Options.TeleporterChamsEnemyOutline, Options.TeleporterChamsEnemyTrans, Options.TeleporterChamsEnemyOutlineTrans,
-        Options.TeleporterChamsTeamColor,  Options.TeleporterChamsTeamOutline,  Options.TeleporterChamsTeamTrans,  Options.TeleporterChamsTeamOutlineTrans)
+        Options.TeleporterChamsEnemyColor, Options.TeleporterChamsEnemyOutline,
+        Options.TeleporterChamsTeamColor,  Options.TeleporterChamsTeamOutline)
 end
 
 local function UpdateProjectileChams()
@@ -2138,7 +2224,7 @@ local function UpdateProjectileChams()
         end
         local hl = ProjectileChamsCache[obj]; if not hl then continue end
         hl.FillColor=Options.ProjectileChamsColor.Value; hl.OutlineColor=Options.ProjectileChamsOutline.Value
-        hl.FillTransparency=Options.ProjectileChamsTrans.Value; hl.OutlineTransparency=Options.ProjectileChamsOutlineTrans.Value
+        hl.FillTransparency=Options.ProjectileChamsColor.Transparency; hl.OutlineTransparency=Options.ProjectileChamsOutline.Transparency
         hl.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop; hl.Enabled=true
     end
 end
@@ -2559,18 +2645,33 @@ do
     ESPT:AddToggle("ESPFriends",     { Text="Show Friends",     Default=true })
     ESPT:AddToggle("ESPIgnoreInvis", { Text="Ignore Invisible", Default=true })
     ESPT:AddDivider()
-    ESPT:AddDropdown("ESPBoxType",    { Values={"None","2D","3D","Corners"}, Default=2, Text="Box Type" })
-    ESPT:AddLabel("Box Color"):AddColorPicker("ESPBoxColor", { Default=Color3.new(1,0,0), Title="Box Color" })
-    ESPT:AddToggle("ESPDistance",     { Text="Distance",      Default=false })
-    ESPT:AddToggle("ESPSkeleton",     { Text="Skeleton",      Default=false })
-    ESPT:AddToggle("ESPWeapon",       { Text="Weapon",        Default=false })
-    ESPT:AddToggle("ESPClass",        { Text="Class",         Default=false })
-    ESPT:AddToggle("ESPHealthValue",  { Text="Health Value",  Default=false })
-    ESPT:AddToggle("ESPHealthBar",    { Text="Health Bar",    Default=false })
-    ESPT:AddToggle("ESPHealthPercent",{ Text="Health %",      Default=false })
-    ESPT:AddToggle("ESPStatus",       { Text="Status Effects",Default=false })
+    -- Box
+    ESPT:AddDropdown("ESPBoxType",      { Values={"None","2D","3D","Corners"}, Default=2, Text="Box Type" })
+    ESPT:AddLabel("Box Color"):AddColorPicker("ESPBoxColor", { Default=Color3.new(1,0,0), Title="Box Color", Transparency=0 })
+    ESPT:AddSlider("ESPBoxThickness",   { Min=1, Max=4, Default=1, Text="Box Thickness", Rounding=0 })
+    ESPT:AddToggle("ESPBoxFill",        { Text="Box Fill",      Default=false })
+    ESPT:AddLabel("Fill Color"):AddColorPicker("ESPBoxFillColor", { Default=Color3.fromRGB(200,0,0), Title="Fill Color", Transparency=0.75 })
     ESPT:AddDivider()
-    ESPT:AddToggle("ESPTracer",       { Text="Tracers",       Default=false })
+    -- Info labels
+    ESPT:AddToggle("ESPDistance",       { Text="Distance",      Default=false })
+    ESPT:AddToggle("ESPSkeleton",       { Text="Skeleton",      Default=false })
+    ESPT:AddToggle("ESPWeapon",         { Text="Weapon",        Default=false })
+    ESPT:AddToggle("ESPClass",          { Text="Class",         Default=false })
+    ESPT:AddToggle("ESPStatus",         { Text="Status Effects",Default=false })
+    ESPT:AddDivider()
+    -- Health bar
+    ESPT:AddToggle("ESPHealthBar",      { Text="Health Bar",    Default=false })
+    ESPT:AddToggle("ESPHealthValue",    { Text="Health Value",  Default=false })
+    ESPT:AddToggle("ESPHealthPercent",  { Text="Health %",      Default=false })
+    ESPT:AddToggle("ESPHPGradient",     { Text="HP Gradient",   Default=true })
+    ESPT:AddDropdown("ESPHPBarSide",    { Values={"Left","Right"}, Default="Left", Text="Bar Side" })
+    ESPT:AddSlider("ESPHPBarWidth",     { Min=1, Max=6, Default=2, Text="Bar Width", Rounding=0 })
+    ESPT:AddLabel("HP High Color"):AddColorPicker("ESPHPColorHigh", { Default=Color3.fromRGB(0,220,80),  Title="HP Full Color" })
+    ESPT:AddLabel("HP Low Color"):AddColorPicker("ESPHPColorLow",   { Default=Color3.fromRGB(220,40,40), Title="HP Low Color" })
+    ESPT:AddLabel("HP BG Color"):AddColorPicker("ESPHPBGColor",     { Default=Color3.fromRGB(20,20,20),  Title="HP Bar BG", Transparency=0 })
+    ESPT:AddDivider()
+    -- Tracers
+    ESPT:AddToggle("ESPTracer",         { Text="Tracers",       Default=false })
     ESPT:AddLabel("Tracer Color"):AddColorPicker("ESPTracerColor", { Default=Color3.new(1,0,0), Title="Tracer" })
     ESPT:AddDropdown("ESPTracerOrigin", { Values={"Bottom","Center","Top"}, Default="Bottom", Text="Origin" })
 
@@ -2607,27 +2708,19 @@ do
     CT:AddToggle("ChamsShowTeam",   { Text="Show Team",     Default=false })
     CT:AddToggle("ChamsShowFriend", { Text="Show Friends",  Default=true })
     CT:AddDivider()
-    CT:AddLabel("Enemy Fill"):AddColorPicker("ChamsEnemyColor",    { Default=Color3.new(1,0,0) })
-    CT:AddLabel("Enemy Outline"):AddColorPicker("ChamsEnemyOutline",{ Default=Color3.new(0.5,0,0) })
-    CT:AddSlider("ChamsEnemyTrans",       { Text="Enemy Fill Trans",    Default=0, Min=0, Max=1, Rounding=2 })
-    CT:AddSlider("ChamsEnemyOutlineTrans",{ Text="Enemy Outline Trans", Default=0, Min=0, Max=1, Rounding=2 })
+    CT:AddLabel("Enemy Fill"):AddColorPicker("ChamsEnemyColor",    { Default=Color3.new(1,0,0),     Transparency=0 })
+    CT:AddLabel("Enemy Outline"):AddColorPicker("ChamsEnemyOutline",{ Default=Color3.new(0.5,0,0),  Transparency=0 })
     CT:AddDivider()
-    CT:AddLabel("Team Fill"):AddColorPicker("ChamsTeamColor",    { Default=Color3.new(0,0,1) })
-    CT:AddLabel("Team Outline"):AddColorPicker("ChamsTeamOutline",{ Default=Color3.new(0,0,0.5) })
-    CT:AddSlider("ChamsTeamTrans",       { Text="Team Fill Trans",    Default=0, Min=0, Max=1, Rounding=2 })
-    CT:AddSlider("ChamsTeamOutlineTrans",{ Text="Team Outline Trans", Default=0, Min=0, Max=1, Rounding=2 })
+    CT:AddLabel("Team Fill"):AddColorPicker("ChamsTeamColor",    { Default=Color3.new(0,0,1),     Transparency=0 })
+    CT:AddLabel("Team Outline"):AddColorPicker("ChamsTeamOutline",{ Default=Color3.new(0,0,0.5),  Transparency=0 })
     CT:AddDivider()
-    CT:AddLabel("Friend Fill"):AddColorPicker("ChamsFriendColor",    { Default=Color3.new(0,1,0) })
-    CT:AddLabel("Friend Outline"):AddColorPicker("ChamsFriendOutline",{ Default=Color3.new(0,0.5,0) })
-    CT:AddSlider("ChamsFriendTrans",       { Text="Friend Fill Trans",    Default=0, Min=0, Max=1, Rounding=2 })
-    CT:AddSlider("ChamsFriendOutlineTrans",{ Text="Friend Outline Trans", Default=0, Min=0, Max=1, Rounding=2 })
+    CT:AddLabel("Friend Fill"):AddColorPicker("ChamsFriendColor",    { Default=Color3.new(0,1,0),    Transparency=0 })
+    CT:AddLabel("Friend Outline"):AddColorPicker("ChamsFriendOutline",{ Default=Color3.new(0,0.5,0), Transparency=0 })
 
     local VT = CTB:AddTab("Visible Chams")
     VT:AddToggle("VisibleChamsEnabled", { Text="Visible Chams Override", Default=false })
-    VT:AddLabel("Visible Fill"):AddColorPicker("VisibleChamsColor",    { Default=Color3.new(1,1,0) })
-    VT:AddLabel("Visible Outline"):AddColorPicker("VisibleChamsOutline",{ Default=Color3.new(0.5,0.5,0) })
-    VT:AddSlider("VisibleChamsTrans",  { Text="Fill Trans",    Default=0, Min=0, Max=1, Rounding=2 })
-    VT:AddSlider("VisibleOutlineTrans",{ Text="Outline Trans", Default=0, Min=0, Max=1, Rounding=2 })
+    VT:AddLabel("Visible Fill"):AddColorPicker("VisibleChamsColor",    { Default=Color3.new(1,1,0),     Transparency=0 })
+    VT:AddLabel("Visible Outline"):AddColorPicker("VisibleChamsOutline",{ Default=Color3.new(0.5,0.5,0), Transparency=0 })
     VT:AddDivider()
     VT:AddToggle("ChamsVisibleOnly", { Text="Visible Only Mode", Default=false })
     VT:AddLabel("Vis Enemy"):AddColorPicker("VisibleEnemyColor",  { Default=Color3.new(1,0,0) })
@@ -2638,57 +2731,39 @@ end
 do
     local WG = Tabs.Visuals:AddRightGroupbox("World Chams", "layers")
     WG:AddToggle("ChamsWorldEnabled", { Text="World Chams", Default=false })
-    WG:AddLabel("HP Fill"):AddColorPicker("HealthChamsColor",    { Default=Color3.new(0,1,0) })
-    WG:AddLabel("HP Outline"):AddColorPicker("HealthChamsOutline",{ Default=Color3.new(0,0.5,0) })
-    WG:AddSlider("HealthChamsTrans",       { Text="HP Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
-    WG:AddSlider("HealthChamsOutlineTrans",{ Text="HP Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddLabel("HP Fill"):AddColorPicker("HealthChamsColor",    { Default=Color3.new(0,1,0),     Transparency=0.5 })
+    WG:AddLabel("HP Outline"):AddColorPicker("HealthChamsOutline",{ Default=Color3.new(0,0.5,0),  Transparency=0.5 })
     WG:AddDivider()
-    WG:AddLabel("Ammo Fill"):AddColorPicker("AmmoChamsColor",    { Default=Color3.new(1,0.5,0) })
-    WG:AddLabel("Ammo Outline"):AddColorPicker("AmmoChamsOutline",{ Default=Color3.new(0.5,0.25,0) })
-    WG:AddSlider("AmmoChamsTrans",       { Text="Ammo Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
-    WG:AddSlider("AmmoChamsOutlineTrans",{ Text="Ammo Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddLabel("Ammo Fill"):AddColorPicker("AmmoChamsColor",    { Default=Color3.new(1,0.5,0),    Transparency=0.5 })
+    WG:AddLabel("Ammo Outline"):AddColorPicker("AmmoChamsOutline",{ Default=Color3.new(0.5,0.25,0), Transparency=0.5 })
     WG:AddDivider()
     -- Sentry
     WG:AddToggle("SentryChamsEnemy", { Text="Enemy Sentry",  Default=false })
     WG:AddToggle("SentryChamsTeam",  { Text="Team Sentry",   Default=false })
-    WG:AddLabel("Enemy Sentry Fill"):AddColorPicker("SentryChamsEnemyColor",    { Default=Color3.new(1,0,0) })
-    WG:AddLabel("Enemy Sentry Outline"):AddColorPicker("SentryChamsEnemyOutline",{ Default=Color3.new(0.5,0,0) })
-    WG:AddSlider("SentryChamsEnemyTrans",       { Text="Enemy Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
-    WG:AddSlider("SentryChamsEnemyOutlineTrans",{ Text="Enemy Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
-    WG:AddLabel("Team Sentry Fill"):AddColorPicker("SentryChamsTeamColor",    { Default=Color3.new(0,0.5,1) })
-    WG:AddLabel("Team Sentry Outline"):AddColorPicker("SentryChamsTeamOutline",{ Default=Color3.new(0,0.25,0.5) })
-    WG:AddSlider("SentryChamsTeamTrans",       { Text="Team Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
-    WG:AddSlider("SentryChamsTeamOutlineTrans",{ Text="Team Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddLabel("Enemy Sentry Fill"):AddColorPicker("SentryChamsEnemyColor",    { Default=Color3.new(1,0,0),      Transparency=0.5 })
+    WG:AddLabel("Enemy Sentry Outline"):AddColorPicker("SentryChamsEnemyOutline",{ Default=Color3.new(0.5,0,0),   Transparency=0.5 })
+    WG:AddLabel("Team Sentry Fill"):AddColorPicker("SentryChamsTeamColor",    { Default=Color3.new(0,0.5,1),     Transparency=0.5 })
+    WG:AddLabel("Team Sentry Outline"):AddColorPicker("SentryChamsTeamOutline",{ Default=Color3.new(0,0.25,0.5), Transparency=0.5 })
     WG:AddDivider()
     -- Dispenser
     WG:AddToggle("DispenserChamsEnemy", { Text="Enemy Dispenser",  Default=false })
     WG:AddToggle("DispenserChamsTeam",  { Text="Team Dispenser",   Default=false })
-    WG:AddLabel("Enemy Dispenser Fill"):AddColorPicker("DispenserChamsEnemyColor",    { Default=Color3.new(1,0.3,0) })
-    WG:AddLabel("Enemy Dispenser Outline"):AddColorPicker("DispenserChamsEnemyOutline",{ Default=Color3.new(0.5,0.15,0) })
-    WG:AddSlider("DispenserChamsEnemyTrans",       { Text="Enemy Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
-    WG:AddSlider("DispenserChamsEnemyOutlineTrans",{ Text="Enemy Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
-    WG:AddLabel("Team Dispenser Fill"):AddColorPicker("DispenserChamsTeamColor",    { Default=Color3.new(0,1,0.5) })
-    WG:AddLabel("Team Dispenser Outline"):AddColorPicker("DispenserChamsTeamOutline",{ Default=Color3.new(0,0.5,0.25) })
-    WG:AddSlider("DispenserChamsTeamTrans",       { Text="Team Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
-    WG:AddSlider("DispenserChamsTeamOutlineTrans",{ Text="Team Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddLabel("Enemy Dispenser Fill"):AddColorPicker("DispenserChamsEnemyColor",    { Default=Color3.new(1,0.3,0),      Transparency=0.5 })
+    WG:AddLabel("Enemy Dispenser Outline"):AddColorPicker("DispenserChamsEnemyOutline",{ Default=Color3.new(0.5,0.15,0),  Transparency=0.5 })
+    WG:AddLabel("Team Dispenser Fill"):AddColorPicker("DispenserChamsTeamColor",    { Default=Color3.new(0,1,0.5),     Transparency=0.5 })
+    WG:AddLabel("Team Dispenser Outline"):AddColorPicker("DispenserChamsTeamOutline",{ Default=Color3.new(0,0.5,0.25), Transparency=0.5 })
     WG:AddDivider()
     -- Teleporter
     WG:AddToggle("TeleporterChamsEnemy", { Text="Enemy Teleporter",  Default=false })
     WG:AddToggle("TeleporterChamsTeam",  { Text="Team Teleporter",   Default=false })
-    WG:AddLabel("Enemy Tele Fill"):AddColorPicker("TeleporterChamsEnemyColor",    { Default=Color3.new(1,0,1) })
-    WG:AddLabel("Enemy Tele Outline"):AddColorPicker("TeleporterChamsEnemyOutline",{ Default=Color3.new(0.5,0,0.5) })
-    WG:AddSlider("TeleporterChamsEnemyTrans",       { Text="Enemy Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
-    WG:AddSlider("TeleporterChamsEnemyOutlineTrans",{ Text="Enemy Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
-    WG:AddLabel("Team Tele Fill"):AddColorPicker("TeleporterChamsTeamColor",    { Default=Color3.new(0,0.8,1) })
-    WG:AddLabel("Team Tele Outline"):AddColorPicker("TeleporterChamsTeamOutline",{ Default=Color3.new(0,0.4,0.5) })
-    WG:AddSlider("TeleporterChamsTeamTrans",       { Text="Team Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
-    WG:AddSlider("TeleporterChamsTeamOutlineTrans",{ Text="Team Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddLabel("Enemy Tele Fill"):AddColorPicker("TeleporterChamsEnemyColor",    { Default=Color3.new(1,0,1),     Transparency=0.5 })
+    WG:AddLabel("Enemy Tele Outline"):AddColorPicker("TeleporterChamsEnemyOutline",{ Default=Color3.new(0.5,0,0.5), Transparency=0.5 })
+    WG:AddLabel("Team Tele Fill"):AddColorPicker("TeleporterChamsTeamColor",    { Default=Color3.new(0,0.8,1),   Transparency=0.5 })
+    WG:AddLabel("Team Tele Outline"):AddColorPicker("TeleporterChamsTeamOutline",{ Default=Color3.new(0,0.4,0.5), Transparency=0.5 })
     WG:AddDivider()
     WG:AddToggle("ChamsProjectilesEnabled", { Text="Projectile Chams", Default=false })
-    WG:AddLabel("Projectile Fill"):AddColorPicker("ProjectileChamsColor",    { Default=Color3.new(1,1,0) })
-    WG:AddLabel("Projectile Outline"):AddColorPicker("ProjectileChamsOutline",{ Default=Color3.new(0.5,0.5,0) })
-    WG:AddSlider("ProjectileChamsTrans",       { Text="Projectile Fill Trans",    Default=0.5, Min=0, Max=1, Rounding=2 })
-    WG:AddSlider("ProjectileChamsOutlineTrans",{ Text="Projectile Outline Trans", Default=0.5, Min=0, Max=1, Rounding=2 })
+    WG:AddLabel("Projectile Fill"):AddColorPicker("ProjectileChamsColor",    { Default=Color3.new(1,1,0),    Transparency=0.5 })
+    WG:AddLabel("Projectile Outline"):AddColorPicker("ProjectileChamsOutline",{ Default=Color3.new(0.5,0.5,0), Transparency=0.5 })
 end
 
 local OL
@@ -3078,7 +3153,7 @@ local function RunAutoBackstab(playerData)
             if tick()-S.lastShotTime >= 0.15 then
                 pcall(function()
                     local L = LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables
-                    L.Held.Value = true; task.wait(0.05); L.Held.Value = false
+                    L.Held1.Value = true; task.wait(0.05); L.Held1.Value = false
                 end)
                 S.shooting=true; S.lastShotTime=tick()
             end; break
@@ -3321,13 +3396,13 @@ local function UpdateAccChams()
         local fc, oc, ft, ot
         if pd.IsFriend then
             fc=Options.ChamsFriendColor.Value; oc=Options.ChamsFriendOutline.Value
-            ft=Options.ChamsFriendTrans.Value; ot=Options.ChamsFriendOutlineTrans.Value
+            ft=Options.ChamsFriendColor.Transparency; ot=Options.ChamsFriendOutline.Transparency
         elseif pd.IsEnemy then
             fc=Options.ChamsEnemyColor.Value; oc=Options.ChamsEnemyOutline.Value
-            ft=Options.ChamsEnemyTrans.Value; ot=Options.ChamsEnemyOutlineTrans.Value
+            ft=Options.ChamsEnemyColor.Transparency; ot=Options.ChamsEnemyOutline.Transparency
         else
             fc=Options.ChamsTeamColor.Value; oc=Options.ChamsTeamOutline.Value
-            ft=Options.ChamsTeamTrans.Value; ot=Options.ChamsTeamOutlineTrans.Value
+            ft=Options.ChamsTeamColor.Transparency; ot=Options.ChamsTeamOutline.Transparency
         end
         pcall(function()
             hl.FillColor=fc; hl.OutlineColor=oc
@@ -3587,4 +3662,4 @@ Library:OnUnload(function()
     Library.Unloaded = true
 end)
 
-print("[Aegis Loaded]")
+print("[Aegis] loaded, account stolen.")
