@@ -3184,7 +3184,7 @@ local function RunAutoBackstab(playerData)
             if tick()-S.lastShotTime >= 0.15 then
                 pcall(function()
                     local L = LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables
-                    L.Held1.Value = true; task.wait(0.05); L.Held1.Value = false
+                    L.Held.Value = true; task.wait(0.05); L.Held.Value = false
                 end)
                 S.shooting=true; S.lastShotTime=tick()
             end; break
