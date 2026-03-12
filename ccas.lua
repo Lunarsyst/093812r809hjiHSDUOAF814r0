@@ -1,9 +1,5 @@
--- Aegis | Typical Colors 2
--- Obsidian UI Library
-
-------------------------------------------------------------
 -- PLACE CHECK
-------------------------------------------------------------
+-- btw if you're seeing this dm 1_aegis on discord </3
 if game.PlaceId ~= 328028363 then
     game:GetService("Players").LocalPlayer:Kick("[Aegis] join tc2 diddyblud")
     return
@@ -11,11 +7,11 @@ end
 
 if setthreadidentity then setthreadidentity(8) end
 
-------------------------------------------------------------
+
 -- ANTICHEAT BYPASS (getreg thread cancellation)
 -- Enumerates all live coroutines via getreg(), cancels any
 -- threads sourced from NewLoader. Expects exactly 3.
-------------------------------------------------------------
+
 do
     print("[Aegis] bypass: starting...")
     local _RS  = game:GetService("RunService")
@@ -57,9 +53,8 @@ do
 end
 
 
-------------------------------------------------------------
 -- LIBRARY
-------------------------------------------------------------
+
 local repo        = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local Library, ThemeManager, SaveManager
 
@@ -87,12 +82,12 @@ local Toggles = Library.Toggles
 
 Library.ShowToggleFrameInKeybinds = true
 
-------------------------------------------------------------
+
 -- CHEATER LIST (external loadstring)
 -- The linked script should set:
 --   getgenv().AegisCheaterList = { [userId] = "DisplayName", ... }
 -- If the link hasn't been set yet, this is a no-op.
-------------------------------------------------------------
+
 do
     local CHEATER_LIST_URL = "https://raw.githubusercontent.com/Lunarsyst/-3197-541/refs/heads/main/21398"
     if CHEATER_LIST_URL ~= "" then
@@ -112,9 +107,9 @@ local function IsCheater(player)
     return CheaterList[player.UserId] ~= nil
 end
 
-------------------------------------------------------------
+
 -- SERVICES
-------------------------------------------------------------
+
 local Players            = game:GetService("Players")
 local RunService         = game:GetService("RunService")
 local UserInputService   = game:GetService("UserInputService")
@@ -125,9 +120,9 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 local Stats              = game:GetService("Stats")
 local LogService         = game:GetService("LogService")
 
-------------------------------------------------------------
+
 -- WEAPONS MODULE (firebullet)
-------------------------------------------------------------
+
 local WeaponsModule = nil
 task.spawn(function()
     pcall(function()
@@ -145,9 +140,9 @@ local function FireShot()
     end
 end
 
-------------------------------------------------------------
+
 -- WEAPON VALUE SNAPSHOT (for Gun Mod restores)
-------------------------------------------------------------
+
 local WeaponSnapshot = {}
 task.spawn(function()
     task.wait(2)
@@ -169,9 +164,9 @@ local LocalPlayer = Players.LocalPlayer
 
 local isMobileDevice = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
-------------------------------------------------------------
+
 -- AEGIS STATUS (attribute handshake)
-------------------------------------------------------------
+
 local AEGIS_ATTR = "_rbxint"
 local AegisUserCache = {}  -- [player] = true
 
@@ -181,9 +176,9 @@ local function StampAegisCharacter(char)
 end
 local isMobileMode   = false
 
-------------------------------------------------------------
+
 -- CONSTANTS
-------------------------------------------------------------
+
 local BACKSTAB_RANGE         = 7.8
 local MELEE_RANGE_RAGE       = 7.8
 local MELEE_RANGE_DEMOKNIGHT = 9
@@ -192,10 +187,10 @@ local TC2_JUMP_POWER         = 16
 local PROJECTILE_OFFSET      = Vector3.new(0.32, -0.14, -0.56)
 local SIM_PARAMS_CACHE_TTL   = 0.5
 
-------------------------------------------------------------
+
 -- CACHED PLAYER LIST
 -- Rebuilt only on join/leave, never per-frame
-------------------------------------------------------------
+
 local cachedPlayerList = {}
 do
     for _, p in ipairs(Players:GetPlayers()) do table.insert(cachedPlayerList, p) end
@@ -209,9 +204,9 @@ do
     end)
 end
 
-------------------------------------------------------------
+
 -- STATE
-------------------------------------------------------------
+
 local S = {
     charlieKirk = false,
     shooting = false, lastShotTime = 0, shotInterval = 0.033,
@@ -263,9 +258,9 @@ local FrameCache = {
     lastPredictedPos = nil,
 }
 
-------------------------------------------------------------
+
 -- FREECAM DUMMY
-------------------------------------------------------------
+
 task.spawn(function()
     local function EnsureFreecamDummy()
         pcall(function()
@@ -280,9 +275,9 @@ task.spawn(function()
     while true do task.wait(5); if Library.Unloaded then break end; EnsureFreecamDummy() end
 end)
 
-------------------------------------------------------------
+
 -- GUI LOADER
-------------------------------------------------------------
+
 local function EnsureGUILoaded()
     if S._guiLoaded then return true end
     pcall(function()
@@ -306,9 +301,9 @@ local function RightClick()
     end)
 end
 
-------------------------------------------------------------
+
 -- DATA TABLES
-------------------------------------------------------------
+
 local HitboxTables = {
     Head  = {"Head","HeadHB"},
     Chest = {"UpperTorso","HumanoidRootPart"},
@@ -436,9 +431,9 @@ local StatusLetters = {
     ADS         = {Letter="ADS", Color=Color3.fromRGB(200,200,200)},
 }
 
-------------------------------------------------------------
+
 -- CONFIG
-------------------------------------------------------------
+
 getgenv().Config = {
     SilentAim     = {Enabled=false, FOV=200},
     AntiAim       = {Enabled=false, Mode="jitter", JitterAngle=90, JitterSpeed=15, AntiAimSpeed=180},
@@ -457,9 +452,9 @@ local function GetWeaponType(weapon)
     return "Hitscan"
 end
 
-------------------------------------------------------------
+
 -- WINDOW & TABS
-------------------------------------------------------------
+
 print("[Aegis] creating window...")
 local Window = Library:CreateWindow({
     Title = "Aegis",
@@ -478,16 +473,16 @@ local Tabs = {
     ["UI Settings"] = Window:AddTab("UI",     "settings"),
 }
 
-------------------------------------------------------------
+
 -- NOTIFY HELPER
-------------------------------------------------------------
+
 local function Notify(msg, duration)
     Library:Notify({ Title="Aegis", Description=tostring(msg), Time=duration or 3 })
 end
 
-------------------------------------------------------------
+
 -- UTILITY
-------------------------------------------------------------
+
 local function GetCharacter(p)    return p and p.Character end
 local function GetHumanoid(c)     return c and c:FindFirstChildOfClass("Humanoid") end
 local function GetHRP(c)          return c and c:FindFirstChild("HumanoidRootPart") end
@@ -511,9 +506,9 @@ local function WorldToViewportPoint(pos)
     return Vector2.new(sp.X, sp.Y), os, sp.Z
 end
 
-------------------------------------------------------------
+
 -- VISIBILITY (with early-exit dot product to skip off-screen raycasts)
-------------------------------------------------------------
+
 local raycastParams = RaycastParams.new()
 raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
 raycastParams.IgnoreWater = true
@@ -543,9 +538,9 @@ local function IsCharacterInvisible(char)
     return head and head.Transparency > 0.9
 end
 
-------------------------------------------------------------
+
 -- REACH CHECK (used by melee/backstab to verify LOS)
-------------------------------------------------------------
+
 local function HasLineOfSight(fromPos, toPos)
     local rp = RaycastParams.new()
     rp.FilterType = Enum.RaycastFilterType.Blacklist
@@ -557,9 +552,9 @@ local function HasLineOfSight(fromPos, toPos)
     return not hit or (hit.Position - fromPos).Magnitude >= dir.Magnitude - 1
 end
 
-------------------------------------------------------------
+
 -- GetBestVisiblePart (fixed — no fallback, sort from dropdown)
-------------------------------------------------------------
+
 local function GetBestVisiblePart(char, selectedGroups, sortMode)
     if not char or char == LocalPlayer.Character then return nil end
     sortMode = sortMode or "Closest to Mouse"
@@ -597,9 +592,9 @@ local function GetBestVisiblePart(char, selectedGroups, sortMode)
     end
 end
 
-------------------------------------------------------------
+
 -- PLAYER INFO HELPERS
-------------------------------------------------------------
+
 local function GetPlayerClass(p)
     local st = p:FindFirstChild("Status")
     if st then local c = st:FindFirstChild("Class"); if c then return tostring(c.Value) end end
@@ -741,9 +736,9 @@ local function IsSyringeWeapon(weapon)
     return weapon == "Syringe Crossbow" or weapon == "Apollo"
 end
 
-------------------------------------------------------------
+
 -- SIM RAY PARAMS (cached TTL, using cachedPlayerList)
-------------------------------------------------------------
+
 local function GetSimRayParams()
     local now = tick()
     if S.simRayParamsCache and (now - S.simRayParamsCacheTime) < SIM_PARAMS_CACHE_TTL then
@@ -761,9 +756,9 @@ local function GetSimRayParams()
     return rp
 end
 
-------------------------------------------------------------
+
 -- VELOCITY TRACKING (uses cachedPlayerList)
-------------------------------------------------------------
+
 local function UpdateVelocityTracking()
     local now = tick()
     if now - S.lastVelocityUpdate < 0.03 then return end
@@ -828,9 +823,9 @@ local function IsVelocityStale(player)
     return GetPlayerVelocity(player).Magnitude > 10 and (recent.Pos - older.Pos).Magnitude < 2
 end
 
-------------------------------------------------------------
+
 -- MOVEMENT SIMULATION
-------------------------------------------------------------
+
 -- SimulateTargetPosition pre-declared so it's accessible outside the do..end block.
 -- SimTraceGround / SimCheckWall / SimTraceSurface are private helpers that don't
 -- need to be chunk-level locals — wrapping them here frees 3 registers.
@@ -984,9 +979,9 @@ do
 end  -- SimulateTargetPosition
 end  -- do block
 
-------------------------------------------------------------
+
 -- OBJECT CACHING
-------------------------------------------------------------
+
 local function RefreshObjectCaches()
     cachedSentries = {}; cachedDispensers = {}; cachedTeleporters = {}
     for _, v in pairs(Workspace:GetChildren()) do
@@ -1066,9 +1061,9 @@ local function GetProjectiles()
     return result
 end
 
-------------------------------------------------------------
+
 -- CHARGE TRACKING
-------------------------------------------------------------
+
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed or Library.Unloaded then return end
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -1095,9 +1090,9 @@ local function GetCurrentWeaponSpeed(weaponName)
     return nil
 end
 
-------------------------------------------------------------
+
 -- PROJECTILE PREDICTION
-------------------------------------------------------------
+
 local function CalculateAimPoint(origin, targetPos, speed, gravity, weaponName)
     if gravity == 0 then return targetPos end
     local dir  = targetPos - origin
@@ -1222,9 +1217,9 @@ local function PredictProjectileHit(targetPart, player, weaponName)
     return predictedPos, travelTime
 end
 
-------------------------------------------------------------
+
 -- BUILD PLAYER DATA (single WorldToViewportPoint per player)
-------------------------------------------------------------
+
 local function BuildPlayerData()
     local data  = {}
     local lc    = GetLocalCharacter(); local lhrp = lc and GetHRP(lc); if not lhrp then return data end
@@ -1255,9 +1250,9 @@ local function BuildPlayerData()
     return data
 end
 
-------------------------------------------------------------
+
 -- SILENT AIM TARGET SELECTION
-------------------------------------------------------------
+
 local function GetSilentAimTarget(playerData)
     local prof       = GetActiveSAProfile()
     local fov        = Options[prof.fov] and Options[prof.fov].Value or 200
@@ -1335,9 +1330,9 @@ local function GetSilentAimTarget(playerData)
     return bestPart, bestPlayer
 end
 
-------------------------------------------------------------
+
 -- AIM ARMS (0.5s hold, 0.3s smooth return)
-------------------------------------------------------------
+
 local ARM_HOLD_TIME   = 0.5
 local ARM_RETURN_TIME = 0.3
 
@@ -1399,9 +1394,9 @@ local function TriggerAimArms(targetPos)
     end
 end
 
-------------------------------------------------------------
+
 -- CAMERA HOOK
-------------------------------------------------------------
+
 local function GetProjectileAimCFrame(target, targetPlr, weapon)
     if weapon == "Huntsman" then
         local tChar = target:FindFirstAncestorOfClass("Model")
@@ -1531,9 +1526,9 @@ task.spawn(function()
     end)
 end)
 
-------------------------------------------------------------
+
 -- NAMECALL HOOK (Fall Damage intercept)
-------------------------------------------------------------
+
 local _ncOrig
 _ncOrig = hookmetamethod(game, "__namecall", function(self2, ...)
     if not Library.Unloaded then
@@ -1545,9 +1540,9 @@ _ncOrig = hookmetamethod(game, "__namecall", function(self2, ...)
     return _ncOrig(self2, ...)
 end)
 
-------------------------------------------------------------
+
 -- WALLBANG hook — __index intercept on Clips
-------------------------------------------------------------
+
 local wallbangHook = nil
 local wallbangActive = false
 
@@ -1575,9 +1570,9 @@ local function RemoveWallbangHook()
     end
 end
 
-------------------------------------------------------------
+
 -- NO SPREAD
-------------------------------------------------------------
+
 local function SetupNoSpread()
     if S.noSpreadSetup or not EnsureGUILoaded() then return end
     S.noSpreadSetup = true
@@ -1587,9 +1582,9 @@ local function SetupNoSpread()
     end)
 end
 
-------------------------------------------------------------
+
 -- SPEED
-------------------------------------------------------------
+
 local function SetupSpeed()
     if S.speedConnection then S.speedConnection:Disconnect(); S.speedConnection = nil end
     if Config.Speed.Enable and LocalPlayer.Character then
@@ -1602,9 +1597,9 @@ local function SetupSpeed()
     end
 end
 
-------------------------------------------------------------
+
 -- MISC
-------------------------------------------------------------
+
 local function ApplyThirdPerson(state)
     pcall(function()
         LocalPlayer:SetAttribute("ThirdPerson", state)
@@ -1621,9 +1616,9 @@ local function ApplyDeviceSpoof(platform)
     end)
 end
 
-------------------------------------------------------------
+
 -- MOBILE BUTTON
-------------------------------------------------------------
+
 local function CreateMobileButton()
     if S.mobileToggleButton then return end
     local sg = Instance.new("ScreenGui"); sg.Name = "AegisMobileButton"
@@ -1661,9 +1656,9 @@ local function DestroyMobileButton()
     if S.mobileToggleButton then S.mobileToggleButton:Destroy(); S.mobileToggleButton = nil end
 end
 
-------------------------------------------------------------
+
 -- CHARACTER RESPAWN
-------------------------------------------------------------
+
 LocalPlayer.CharacterAdded:Connect(function(char)
     task.wait(1); EnsureGUILoaded(); SetupNoSpread(); SetupSpeed()
     S.jitterDir = 1; S.spinAngle = 0; S.armTarget = nil; S.armReturning = false;
@@ -1687,9 +1682,9 @@ task.spawn(function() task.wait(2); EnsureGUILoaded(); SetupNoSpread()
     end
 end)
 
-------------------------------------------------------------
+
 -- DRAWING HELPERS
-------------------------------------------------------------
+
 local ESPObjects    = {}
 local ObjectESPCache = {}
 
@@ -1722,17 +1717,17 @@ local function MkDraw(t, p)
     local d = NewDrawing(t); pcall(function() for k,v in pairs(p or {}) do d[k] = v end end); return d
 end
 
-------------------------------------------------------------
+
 -- SHOT VISUALS STATE
-------------------------------------------------------------
+
 -- SV: small state table to avoid chunk-level register pressure
 local SV = {
     shotNumSetup = false,
 }
 
-------------------------------------------------------------
+
 -- ADS TRACKING (reads LegacyLocalVariables each frame via GetPlayerModifiers)
-------------------------------------------------------------
+
 
 local function CreatePlayerESP(player)
     if ESPObjects[player] then return end
@@ -1825,9 +1820,9 @@ local function HideObjectESP(inst)
     d.HealthText.Visible=false; d.HealthPercentText.Visible=false; d.NameText.Visible=false
 end
 
-------------------------------------------------------------
+
 -- ESP RENDERING
-------------------------------------------------------------
+
 local function Get2DBox(pd)
     local sp = pd.ScreenPos; local depth = pd.Depth
     if not pd.OnScreen or depth < 1 then return nil end
@@ -2078,10 +2073,9 @@ local function GetObjectBox(inst)
 end
 
 
-------------------------------------------------------------
 -- BUILDING TEAM HELPER
 -- Returns "enemy", "team", or "unknown" for a building model
-------------------------------------------------------------
+
 local function GetBuildingTeam(inst)
     local ownerName = inst.Name:match("^(.+)'s ") or inst.Name:match("^(.+)'s")
     if not ownerName then return "unknown" end
@@ -2117,9 +2111,9 @@ local function UpdateObjectESP(inst, tn, overrideColor)
     end
 end
 
-------------------------------------------------------------
+
 -- CHAMS (keyed on player, handles respawns correctly)
-------------------------------------------------------------
+
 local function GetOrCreatePlayerHighlight(pd)
     local cached = PlayerChamsCache[pd.Player]
     if cached then
@@ -2272,9 +2266,8 @@ local function UpdateProjectileChams()
 end
 
 
-------------------------------------------------------------
 -- GUN MOD HELPERS
-------------------------------------------------------------
+
 local function SetFireRateMultiplier(mult)
     pcall(function()
         local wepName = GetLocalWeapon()
@@ -2330,9 +2323,9 @@ local function SetMaxRange(enabled)
     end)
 end
 
-------------------------------------------------------------
+
 -- DAMAGE MOD
-------------------------------------------------------------
+
 local _dmgModOrig = nil
 local _dmgModInstalled = false
 local _dmgModFrameworks = {}
@@ -2365,9 +2358,9 @@ local function InstallDmgMod()
     end)
 end
 
-------------------------------------------------------------
+
 -- INF CLOAK / INF SHIELD
-------------------------------------------------------------
+
 local _infCloakConn = nil
 local _infShieldConn = nil
 
@@ -2397,9 +2390,9 @@ local function SetupInfShield(enabled)
     end)
 end
 
-------------------------------------------------------------
+
 -- PER-WEAPON-TYPE INF AMMO
-------------------------------------------------------------
+
 local _profileInfUseConns   = {}  -- keyed by type "Projectile","Hitscan","Melee"
 local _profileInfResConns   = {}
 
@@ -2449,9 +2442,9 @@ local function SetupProfileInfResAmmo(wtype, enabled)
     end)
 end
 
-------------------------------------------------------------
+
 -- PER-WEAPON-TYPE FIRE RATE (applied only for active type)
-------------------------------------------------------------
+
 local function ApplyWeaponProfileFireRates()
     pcall(function()
         local ptype = GetCurrentProfileType()
@@ -2504,9 +2497,9 @@ UserInputService.InputBegan:Connect(function(input, processed)
     if _bhopHeartbeat then _bhopHeartbeat:Disconnect(); _bhopHeartbeat = nil end
 end)
 
-------------------------------------------------------------
+
 -- UI — AIMBOT TAB
-------------------------------------------------------------
+
 
 -- Shared: FOV circle color + aim arms
 do
@@ -2675,9 +2668,8 @@ do
 end
 
 
-------------------------------------------------------------
 -- UI — VISUALS TAB
-------------------------------------------------------------
+
 do
     local ETB  = Tabs.Visuals:AddLeftTabbox()
     local ESPT = ETB:AddTab("Player ESP")
@@ -2839,9 +2831,9 @@ do
     end end)
 end
 
-------------------------------------------------------------
+
 -- UI — MISC TAB
-------------------------------------------------------------
+
 do
     local ML = Tabs.Misc:AddLeftGroupbox("Misc", "wrench")
     ML:AddToggle("AegisStatus", { Text="Aegis Status", Default=false,
@@ -2923,9 +2915,9 @@ do
     Options.AutoUberCondition:OnChanged(function() Config.AutoUber.Condition = Options.AutoUberCondition.Value end)
 end
 
-------------------------------------------------------------
+
 -- UI — EXPLOITS TAB
-------------------------------------------------------------
+
 do
     local EL = Tabs.Exploits:AddLeftGroupbox("Exploits", "zap")
 
@@ -2984,9 +2976,9 @@ task.spawn(function() while true do task.wait(2); if Library.Unloaded then break
     end)
 end end)
 
-------------------------------------------------------------
+
 -- UI — SETTINGS TAB
-------------------------------------------------------------
+
 do
     local SL = Tabs.Settings:AddLeftGroupbox("FOV", "maximize")
     SL:AddToggle("CustomFOV", { Text="Custom FOV", Default=false })
@@ -3005,9 +2997,9 @@ do
     if isMobileDevice then task.defer(function() task.wait(1); if Toggles.MobileModeToggle then Toggles.MobileModeToggle:SetValue(true) end end) end
 end
 
-------------------------------------------------------------
+
 -- AUTOMATION LOGIC
-------------------------------------------------------------
+
 -- Automation functions bundled into one table to free 10 chunk-level locals.
 -- All entries here are only ever called from the main RenderStepped loop.
 local Auto = {}
@@ -3243,9 +3235,9 @@ function Auto.RunAutoSticky(playerData)
     end
 end
 
-------------------------------------------------------------
+
 -- PROJECTILE PATH VISUALIZATION
-------------------------------------------------------------
+
 function Auto.RunPredictionIndicator()
     if not (Toggles.ShowPredictionIndicator and Toggles.ShowPredictionIndicator.Value and Config.SilentAim.Enabled and S.silentAimKeyActive) then
         PredictionIndicator.Visible = false; return
@@ -3268,9 +3260,9 @@ function Auto.RunPredictionIndicator()
     PredictionIndicator.Visible = false
 end
 
-------------------------------------------------------------
+
 -- HEAL SELF
-------------------------------------------------------------
+
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed or Library.Unloaded then return end
     if Toggles.HealSelfToggle.Value then
@@ -3282,9 +3274,9 @@ UserInputService.InputBegan:Connect(function(input, processed)
     end
 end)
 
-------------------------------------------------------------
+
 -- HIT TRACKING (health cache only — notification UI removed)
-------------------------------------------------------------
+
 task.defer(function()
     local function TrackCharacter(plr)
         if plr == LocalPlayer then return end
@@ -3311,9 +3303,9 @@ LogService.MessageOut:Connect(function(message)
     end
 end)
 
-------------------------------------------------------------
+
 -- CHEATER DETECTOR
-------------------------------------------------------------
+
 task.defer(function()
     local notifiedCheaters = {}
     local function CheckCheater(player)
@@ -3333,9 +3325,9 @@ task.defer(function()
     Players.PlayerRemoving:Connect(function(p) notifiedCheaters[p.UserId] = nil end)
 end)
 
-------------------------------------------------------------
+
 -- MOD / STAFF DETECTOR (own function scope to avoid chunk register overflow)
-------------------------------------------------------------
+
 task.defer(function()
     local STAFF_ATTRS = {
         "IsGroupCoder","IsGroupContributor","IsGroupDeveloper",
@@ -3382,9 +3374,9 @@ task.defer(function()
     Players.PlayerRemoving:Connect(function(p) alreadyNotified[p.UserId] = nil end)
 end)
 
-------------------------------------------------------------
+
 -- WEAPON OUTLINE (highlights enemy/friend equipped weapons via chams colors)
-------------------------------------------------------------
+
 local AccChamsCache = {}  -- [player] = Highlight on their equipped Tool
 local _weaponOutlineHL = nil  -- unused, kept for unload compat
 
@@ -3462,9 +3454,9 @@ local function UpdateAccChams()
     end
 end
 
-------------------------------------------------------------
+
 -- RENDER HELPERS (single table = 1 local instead of 9)
-------------------------------------------------------------
+
 local RH = {}
 
 function RH.UpdateDmgMod()
@@ -3549,9 +3541,9 @@ function RH.AgentNotify(playerData)
     end
 end
 
-------------------------------------------------------------
+
 -- MAIN RENDER LOOP
-------------------------------------------------------------
+
 local MainConnection = RunService.RenderStepped:Connect(function(dt)
     if Library.Unloaded then return end
     Camera = Workspace.CurrentCamera
@@ -3604,9 +3596,9 @@ local MainConnection = RunService.RenderStepped:Connect(function(dt)
     end
 end)
 
-------------------------------------------------------------
+
 -- FPS COUNTER & WATERMARK
-------------------------------------------------------------
+
 task.spawn(function() while true do task.wait(1); if Library.Unloaded then break end; S.fps=S.frames; S.frames=0 end end)
 
 local _WatermarkLabel = nil
@@ -3627,9 +3619,9 @@ task.spawn(function() while true do task.wait(1); if Library.Unloaded then break
 end end)
 pcall(function() Library:SetWatermarkVisibility(true) end)
 
-------------------------------------------------------------
+
 -- CLEANUP
-------------------------------------------------------------
+
 Players.PlayerRemoving:Connect(function(player)
     DestroyPlayerESP(player)
     RemovePlayerHighlight(player)
@@ -3638,9 +3630,9 @@ Players.PlayerRemoving:Connect(function(player)
     lastChamsProps[player]=nil
 end)
 
-------------------------------------------------------------
+
 -- UI SETTINGS TAB
-------------------------------------------------------------
+
 task.defer(function()
     local MenuGroup = Tabs["UI Settings"]:AddLeftGroupbox("Menu", "wrench")
     MenuGroup:AddToggle("KeybindMenuOpen", { Default=Library.KeybindFrame.Visible, Text="Open Keybind Menu",
@@ -3667,9 +3659,9 @@ task.defer(function()
     SaveManager:LoadAutoloadConfig()
 end)
 
-------------------------------------------------------------
+
 -- UNLOAD
-------------------------------------------------------------
+
 Library:OnUnload(function()
     for p in pairs(ESPObjects)    do DestroyPlayerESP(p) end
     for i in pairs(ObjectESPCache) do DestroyObjectESP(i) end
@@ -3706,6 +3698,22 @@ Library:OnUnload(function()
     playerPositionHistory={}
     print("[Aegis] Unloaded!")
     Library.Unloaded = true
+end)
+
+-- play one of the load sounds lol
+task.spawn(function()
+    local ids = {
+        "rbxassetid://119934029971808",
+        "rbxassetid://123315053852370",
+        "rbxassetid://91541918714984",
+    }
+    local snd = Instance.new("Sound")
+    snd.SoundId = ids[math.random(#ids)]
+    snd.Volume  = 1
+    snd.Parent  = workspace
+    snd:Play()
+    snd.Ended:Wait()
+    snd:Destroy()
 end)
 
 print("[Aegis] loaded, account stolen.")
