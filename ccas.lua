@@ -3703,13 +3703,11 @@ end)
 -- play one of the load sounds lol
 task.spawn(function()
     local ids = {
-        "rbxassetid://119934029971808",
-        "rbxassetid://123315053852370",
         "rbxassetid://91541918714984",
     }
     local snd = Instance.new("Sound")
     snd.SoundId = ids[math.random(#ids)]
-    snd.Volume  = 1
+    snd.Volume  = 2
     snd.Parent  = workspace
     snd:Play()
     snd.Ended:Wait()
