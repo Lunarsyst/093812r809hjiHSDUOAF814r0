@@ -228,7 +228,8 @@ local S = {
     armReturnStart = nil, armOriginalCF = nil,
     lastMeleeTarget = nil,
     simRayParamsCache = nil, simRayParamsCacheTime = 0,
-
+    -- CHANGE 6: triggerbot state
+    triggerbotArmed = false, triggerbotArmTime = 0,
 }
 
 local healthCache         = {}
@@ -1276,6 +1277,9 @@ local function GetSilentAimTarget(playerData)
             if not pd.OnScreen then continue end
             if Toggles[prof.ignoreInvis] and Toggles[prof.ignoreInvis].Value and IsCharacterInvisible(pd.Character) then continue end
 
+            -- CHANGE 1: Melee silent aim max range of 8 studs
+            if prof.wtype == "Melee" and pd.Distance > 8 then continue end
+
             local part = GetBestVisiblePart(pd.Character, selGroups, sortMode)
             if not part then continue end
 
@@ -2144,6 +2148,16 @@ local function RemovePlayerHighlight(player)
     local cached = PlayerChamsCache[player]
     if cached then pcall(function() cached.hl:Destroy() end); PlayerChamsCache[player] = nil end
     lastChamsProps[player] = nil
+    -- CHANGE 4: clean up accessory chams on highlight removal
+    local acc = workspace:FindFirstChild("Accoutrements")
+    if acc then
+        for _, folder in pairs(acc:GetChildren()) do
+            if folder.Name:match("^" .. (player.Name or "")) then
+                local ahl = folder:FindFirstChild("AegisAccHL")
+                if ahl then pcall(function() ahl:Destroy() end) end
+            end
+        end
+    end
 end
 
 local function SetChamsProps(hl, player, fc, oc, ft, ot, dm)
@@ -2168,16 +2182,74 @@ local function UpdatePlayerChams(pd)
     else
         fc=Options.ChamsTeamColor.Value; oc=Options.ChamsTeamOutline.Value; ft=Options.ChamsTeamColor.Transparency; ot=Options.ChamsTeamOutline.Transparency
     end
-    if Toggles.VisibleChamsEnabled.Value and IsCharacterVisible(pd.Character) then
-        fc=Options.VisibleChamsColor.Value; oc=Options.VisibleChamsOutline.Value; ft=Options.VisibleChamsColor.Transparency; ot=Options.VisibleChamsOutline.Transparency
+
+    -- CHANGE 2 & 3: overhauled visible chams logic
+    local isVisible = IsCharacterVisible(pd.Character)
+
+    if Toggles.VisibleChamsEnabled.Value and isVisible then
+        if pd.IsEnemy and not Toggles.VisibleChamsEnemy.Value then RemovePlayerHighlight(pd.Player); return end
+        if not pd.IsEnemy and not pd.IsFriend and not Toggles.VisibleChamsTeam.Value then RemovePlayerHighlight(pd.Player); return end
+        if pd.IsFriend and not Toggles.VisibleChamsFriend.Value then RemovePlayerHighlight(pd.Player); return end
+        if pd.IsFriend then
+            fc=Options.VisibleFriendFill.Value;  oc=Options.VisibleFriendOutline.Value
+            ft=Options.VisibleFriendFill.Transparency; ot=Options.VisibleFriendOutline.Transparency
+        elseif pd.IsEnemy then
+            fc=Options.VisibleEnemyFill.Value;   oc=Options.VisibleEnemyOutline.Value
+            ft=Options.VisibleEnemyFill.Transparency; ot=Options.VisibleEnemyOutline.Transparency
+        else
+            fc=Options.VisibleTeamFill.Value;    oc=Options.VisibleTeamOutline.Value
+            ft=Options.VisibleTeamFill.Transparency; ot=Options.VisibleTeamOutline.Transparency
+        end
     end
+
     if Toggles.ChamsVisibleOnly.Value then
-        if not IsCharacterVisible(pd.Character) then RemovePlayerHighlight(pd.Player); return end
-        fc = pd.IsFriend and Options.VisibleFriendColor.Value or (pd.IsEnemy and Options.VisibleEnemyColor.Value or Options.VisibleTeamColor.Value)
+        if not isVisible then RemovePlayerHighlight(pd.Player); return end
+        if pd.IsFriend then
+            fc=Options.VisibleFriendFill.Value;  oc=Options.VisibleFriendOutline.Value
+            ft=Options.VisibleFriendFill.Transparency; ot=Options.VisibleFriendOutline.Transparency
+        elseif pd.IsEnemy then
+            fc=Options.VisibleEnemyFill.Value;   oc=Options.VisibleEnemyOutline.Value
+            ft=Options.VisibleEnemyFill.Transparency; ot=Options.VisibleEnemyOutline.Transparency
+        else
+            fc=Options.VisibleTeamFill.Value;    oc=Options.VisibleTeamOutline.Value
+            ft=Options.VisibleTeamFill.Transparency; ot=Options.VisibleTeamOutline.Transparency
+        end
     end
-    local dm = Toggles.ChamsVisibleOnly.Value and Enum.HighlightDepthMode.Occluded or Enum.HighlightDepthMode.AlwaysOnTop
+
+    -- Visible = Occluded so covered players show through walls differently
+    local dm = (Toggles.VisibleChamsEnabled.Value and isVisible)
+        and Enum.HighlightDepthMode.Occluded
+        or  (Toggles.ChamsVisibleOnly.Value and Enum.HighlightDepthMode.Occluded
+        or   Enum.HighlightDepthMode.AlwaysOnTop)
+
     local hl = GetOrCreatePlayerHighlight(pd); if not hl then return end
     SetChamsProps(hl, pd.Player, fc, oc, ft, ot, dm)
+
+    -- CHANGE 4: accessory chams
+    local acc = workspace:FindFirstChild("Accoutrements")
+    if acc and Toggles.ChamsEnabled.Value then
+        for _, folder in pairs(acc:GetChildren()) do
+            if folder.Name:match("^" .. pd.Player.Name) then
+                local ahl = folder:FindFirstChild("AegisAccHL")
+                if not ahl then
+                    pcall(function()
+                        ahl = Instance.new("Highlight")
+                        ahl.Name = "AegisAccHL"
+                        ahl.Adornee = folder
+                        ahl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                        ahl.Parent = folder
+                    end)
+                end
+                if ahl then
+                    pcall(function()
+                        ahl.FillColor = fc; ahl.OutlineColor = oc
+                        ahl.FillTransparency = ft; ahl.OutlineTransparency = ot
+                        ahl.Enabled = true
+                    end)
+                end
+            end
+        end
+    end
 end
 
 local function UpdateWorldChams()
@@ -2404,7 +2476,10 @@ local function SetupProfileInfUseAmmo(wtype, enabled)
     if not enabled then return end
     pcall(function()
         local L = LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables
-        local ctr = L:FindFirstChild("ammocount"); if not ctr then return end
+        -- CHANGE 7: secondary ammo fix for use ammo
+        local ctr = L:FindFirstChild(wtype == "Secondary" and "ammocount2" or "ammocount")
+        if not ctr then ctr = L:FindFirstChild("ammocount") end
+        if not ctr then return end
         local lastVal = ctr.Value
         local tog = "InfUse_"..wtype
         _profileInfUseConns[wtype] = ctr:GetPropertyChangedSignal("Value"):Connect(function()
@@ -2426,7 +2501,10 @@ local function SetupProfileInfResAmmo(wtype, enabled)
     if not enabled then return end
     pcall(function()
         local L = LocalPlayer.PlayerGui.GUI.Client.LegacyLocalVariables
-        local candidates = {"primarystored","primary_stored","ammostore","ammocount4"}
+        -- CHANGE 7: secondary ammo fix for reserve ammo
+        local candidates = wtype == "Secondary"
+            and {"secondarystored","secondary_stored","ammocount2","ammocount3","secondaryammo"}
+            or  {"primarystored","primary_stored","ammostore","ammocount4"}
         local ctr; for _, name in ipairs(candidates) do local v = L:FindFirstChild(name); if v then ctr = v; break end end
         if not ctr then return end
         local lastVal = ctr.Value
@@ -2513,6 +2591,12 @@ do
         Callback=function(v)
             if Options.GlobalAimKey then Options.GlobalAimKey.Mode = v and "Always" or "Hold" end
         end })
+    FG:AddDivider()
+    -- CHANGE 6: Triggerbot UI
+    FG:AddToggle("TriggerbotEnabled", { Text="Triggerbot", Default=false })
+    FG:AddSlider("TriggerbotDelay",   { Text="Trigger Delay", Default=0, Min=0, Max=0.5, Rounding=2, Suffix="s" })
+    FG:AddDropdown("TriggerbotParts", { Values={"Head","Chest","Torso","Arms","Legs","Feet"}, Default=1, Multi=true, Text="Trigger Parts" })
+    Options["TriggerbotParts"]:SetValue({ Head=true })
 end
 
 -- Projectile groupbox: all projectile-specific SA settings + prediction indicator
@@ -2751,15 +2835,23 @@ do
     CT:AddLabel("Friend Fill"):AddColorPicker("ChamsFriendColor",    { Default=Color3.new(0,1,0),    Transparency=0 })
     CT:AddLabel("Friend Outline"):AddColorPicker("ChamsFriendOutline",{ Default=Color3.new(0,0.5,0), Transparency=0 })
 
+    -- CHANGE 2: Overhauled Visible Chams tab
     local VT = CTB:AddTab("Visible Chams")
-    VT:AddToggle("VisibleChamsEnabled", { Text="Visible Chams Override", Default=false })
-    VT:AddLabel("Visible Fill"):AddColorPicker("VisibleChamsColor",    { Default=Color3.new(1,1,0),     Transparency=0 })
-    VT:AddLabel("Visible Outline"):AddColorPicker("VisibleChamsOutline",{ Default=Color3.new(0.5,0.5,0), Transparency=0 })
+    VT:AddToggle("VisibleChamsEnabled",    { Text="Visible Chams",   Default=false })
+    VT:AddToggle("VisibleChamsEnemy",      { Text="Show Enemy",      Default=true })
+    VT:AddToggle("VisibleChamsTeam",       { Text="Show Team",       Default=false })
+    VT:AddToggle("VisibleChamsFriend",     { Text="Show Friends",    Default=true })
+    VT:AddDivider()
+    VT:AddLabel("Enemy Fill"):AddColorPicker("VisibleEnemyFill",      { Default=Color3.new(1,1,0),       Transparency=0 })
+    VT:AddLabel("Enemy Outline"):AddColorPicker("VisibleEnemyOutline",{ Default=Color3.new(0.5,0.5,0),   Transparency=0 })
+    VT:AddDivider()
+    VT:AddLabel("Team Fill"):AddColorPicker("VisibleTeamFill",        { Default=Color3.new(0,1,1),       Transparency=0 })
+    VT:AddLabel("Team Outline"):AddColorPicker("VisibleTeamOutline",  { Default=Color3.new(0,0.5,0.5),   Transparency=0 })
+    VT:AddDivider()
+    VT:AddLabel("Friend Fill"):AddColorPicker("VisibleFriendFill",    { Default=Color3.new(0,1,0),       Transparency=0 })
+    VT:AddLabel("Friend Outline"):AddColorPicker("VisibleFriendOutline",{ Default=Color3.new(0,0.5,0),   Transparency=0 })
     VT:AddDivider()
     VT:AddToggle("ChamsVisibleOnly", { Text="Visible Only Mode", Default=false })
-    VT:AddLabel("Vis Enemy"):AddColorPicker("VisibleEnemyColor",  { Default=Color3.new(1,0,0) })
-    VT:AddLabel("Vis Team"):AddColorPicker("VisibleTeamColor",    { Default=Color3.new(0,0,1) })
-    VT:AddLabel("Vis Friend"):AddColorPicker("VisibleFriendColor",{ Default=Color3.new(0,1,0) })
 end
 
 do
@@ -3122,7 +3214,8 @@ function Auto.RunSilentAimLogic()
     local target    = FrameCache.silentTarget
     local autoOn    = Toggles[prof.autoShoot] and Toggles[prof.autoShoot].Value
 
-    if target and autoOn then
+    -- CHANGE 5: autoshoot only fires when aim key is also active
+    if target and (autoOn and S.silentAimKeyActive) then
         S.silentAimKeyActive = true  -- force aim deflection while autoshooting
         if not S.shooting then
             VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,0)
@@ -3258,6 +3351,59 @@ function Auto.RunPredictionIndicator()
         end
     end
     PredictionIndicator.Visible = false
+end
+
+-- CHANGE 6: Triggerbot logic
+function Auto.RunTriggerbot()
+    if not (Toggles.TriggerbotEnabled and Toggles.TriggerbotEnabled.Value) then
+        if S.triggerbotArmed and S.shooting then
+            VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0)
+            S.shooting = false
+        end
+        S.triggerbotArmed = false
+        return
+    end
+    if not IsPlayerAlive(LocalPlayer) then return end
+    local weapon = GetLocalWeapon()
+    if BlacklistedWeapons[weapon] then return end
+
+    local prof        = GetActiveSAProfile()
+    local realFOV     = Options[prof.fov]      and Options[prof.fov].Value      or 200
+    local realParts   = Options[prof.bodyParts] and Options[prof.bodyParts].Value or {Head=true}
+    local tbParts     = Options["TriggerbotParts"] and Options["TriggerbotParts"].Value or {Head=true}
+
+    if Options[prof.fov]      then Options[prof.fov].Value      = 10       end
+    if Options[prof.bodyParts] then Options[prof.bodyParts].Value = tbParts end
+
+    local target, _ = GetSilentAimTarget(FrameCache.playerData)
+
+    if Options[prof.fov]      then Options[prof.fov].Value      = realFOV   end
+    if Options[prof.bodyParts] then Options[prof.bodyParts].Value = realParts end
+
+    local delay = Options.TriggerbotDelay and Options.TriggerbotDelay.Value or 0
+
+    if target then
+        if not S.triggerbotArmed then
+            S.triggerbotArmed   = true
+            S.triggerbotArmTime = tick()
+        end
+        if tick() - S.triggerbotArmTime >= delay then
+            if not S.shooting then
+                VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,0)
+                S.shooting = true; S.lastShotTime = tick()
+            elseif tick() - S.lastShotTime >= S.shotInterval then
+                VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0)
+                VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,0)
+                S.lastShotTime = tick()
+            end
+        end
+    else
+        S.triggerbotArmed = false
+        if S.shooting then
+            VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0)
+            S.shooting = false
+        end
+    end
 end
 
 
@@ -3569,6 +3715,7 @@ local MainConnection = RunService.RenderStepped:Connect(function(dt)
     local playerData = FrameCache.playerData
 
     Auto.RunSilentAimLogic()
+    Auto.RunTriggerbot()  -- CHANGE 6: triggerbot in render loop
     Auto.RunAutoWarp(playerData)
     UpdateAimArms()
     RH.UpdateDmgMod()
