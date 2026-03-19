@@ -586,7 +586,7 @@ local function GetBestVisiblePart(char, selectedGroups, sortMode)
     else
         local best, bestDist = nil, math.huge
         for _, p in ipairs(candidates) do
-            local d = (sp - UserInputService:GetMouseLocation()).Magnitude
+            local d = (sp - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
             if d < bestDist then bestDist = d; best = p end
         end
         return best
@@ -1262,7 +1262,7 @@ local function GetSilentAimTarget(playerData)
     local isSyringe  = IsSyringeWeapon(weapon)
     local sortMode   = (Options[prof.sort] and Options[prof.sort].Value) or "Closest to Mouse"
     local selGroups  = (Options[prof.bodyParts] and Options[prof.bodyParts].Value) or {Head=true}
-    local sc         = UserInputService:GetMouseLocation()
+    local sc         = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
 
     local bestPart, bestDist, bestPlayer = nil, math.huge, nil
 
@@ -3624,7 +3624,7 @@ function RH.UpdateFOVCircle()
     local _prof = GetActiveSAProfile()
     if Config.SilentAim.Enabled and Toggles[_prof.fovCircle] and Toggles[_prof.fovCircle].Value then
         local _fov = Options[_prof.fov] and Options[_prof.fov].Value or 200
-        FOVCircle.Position = UserInputService:GetMouseLocation(); FOVCircle.Radius = _fov
+        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2); FOVCircle.Radius = _fov
         FOVCircle.Color    = Options.FOVColor and Options.FOVColor.Value or Color3.new(1,1,1)
         FOVCircle.Visible = true
     else FOVCircle.Visible = false end
@@ -3698,7 +3698,7 @@ local MainConnection = RunService.RenderStepped:Connect(function(dt)
 
     FrameCache.camPos      = Camera.CFrame.Position
     FrameCache.camCF       = Camera.CFrame
-    FrameCache.screenCenter = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    FrameCache.screenCenter = Camera.ViewportSize/2
     FrameCache.frameNum    = FrameCache.frameNum + 1
 
     EnsureGUILoaded()
