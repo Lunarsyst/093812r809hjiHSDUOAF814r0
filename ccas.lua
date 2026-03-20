@@ -2547,6 +2547,16 @@ do
                 RestoreFireRate()
                 ApplyWeaponProfileFireRates()
             end)
+            -- Re-evaluate wallbang for the new profile
+            pcall(function()
+                local wbKey = "WallbangToggle_" .. ptype
+                local activeWB = Toggles[wbKey] and Toggles[wbKey].Value
+                if activeWB then
+                    InstallWallbangHook()
+                else
+                    RemoveWallbangHook()
+                end
+            end)
         end
     end)
 end
