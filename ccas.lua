@@ -2349,7 +2349,7 @@ local function SetFireRateMultiplier(mult)
         local fr = wep:FindFirstChild("FireRate")
         if fr and WeaponSnapshot[wep.Name] and WeaponSnapshot[wep.Name].FireRate then
             local orig = WeaponSnapshot[wep.Name].FireRate
-            fr.Value = wep:FindFirstChild("Projectile") and math.clamp(orig / mult, 0.1, 9e9) or (orig / mult)
+            fr.Value = wep:FindFirstChild("Projectile") and math.clamp(orig / mult, 0.3, 9e9) or (orig / mult)
         end
     end)
 end
@@ -2593,7 +2593,7 @@ do
         end })
     FG:AddDivider()
     -- CHANGE 6: Triggerbot UI
-    FG:AddToggle("TriggerbotEnabled", { Text="Triggerbot", Default=false })
+    FG:AddToggle("TriggerbotEnabled", { Text="Triggerbot [reis fault]", Default=false })
     FG:AddSlider("TriggerbotDelay",   { Text="Trigger Delay", Default=0, Min=0, Max=0.5, Rounding=2, Suffix="s" })
     FG:AddDropdown("TriggerbotParts", { Values={"Head","Chest","Torso","Arms","Legs","Feet"}, Default=1, Multi=true, Text="Trigger Parts" })
     Options["TriggerbotParts"]:SetValue({ Head=true })
