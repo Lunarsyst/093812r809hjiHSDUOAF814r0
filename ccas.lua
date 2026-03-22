@@ -59,7 +59,7 @@ do
     end)
 end
 
-print("[aegis] rmb")
+print("[Aegis] remotes done..")
 
 -- LIBRARY
 
