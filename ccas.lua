@@ -50,8 +50,16 @@ do
     end
 
     getgenv().tc2_anticheat_breaker = (cancelled == 3)
+
+    task.spawn(function()
+        local remote = game:GetService("ReplicatedStorage"):WaitForChild("BeanBoozled", 30)
+        if remote then
+            remote.OnClientEvent:Connect(function(...) end)
+        end
+    end)
 end
 
+print("[aegis] rmb")
 
 -- LIBRARY
 
